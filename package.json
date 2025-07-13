@@ -1,0 +1,43 @@
+{
+  "name": "linkedin-auto-reply-extension",
+  "version": "1.0.0",
+  "description": "AI-powered LinkedIn auto-reply Chrome extension using ONNX Runtime Web",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build.js --production",
+    "dev": "node scripts/build.js --watch",
+    "build:webpack": "webpack --mode=production",
+    "clean": "rimraf dist",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src --ext .ts,.tsx",
+    "format": "prettier --write src/**/*.{ts,tsx,css,html}",
+    "dl-models": "tsx scripts/fetch-flan-t5.ts",
+    "test:draft": "node tests/draft-generation.test.js"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.268",
+    "@types/node": "^20.14.9",
+    "@typescript-eslint/eslint-plugin": "^7.16.0",
+    "@typescript-eslint/parser": "^7.16.0",
+    "copy-webpack-plugin": "^12.0.2",
+    "css-loader": "^7.1.2",
+    "esbuild": "^0.25.6",
+    "eslint": "^8.57.0",
+    "eslint-plugin-react": "^7.34.3",
+    "html-webpack-plugin": "^5.6.0",
+    "mini-css-extract-plugin": "^2.9.0",
+    "prettier": "^3.3.2",
+    "rimraf": "^5.0.7",
+    "style-loader": "^4.0.0",
+    "ts-loader": "^9.5.1",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.20.3",
+    "typescript": "^5.5.3",
+    "webpack": "^5.92.1",
+    "webpack-cli": "^5.1.4"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^3.6.3",
+    "onnxruntime-web": "^1.22.0"
+  }
+}
