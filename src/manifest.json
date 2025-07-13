@@ -23,5 +23,5 @@
     }
   ],
   "permissions": ["storage", "tabs", "webNavigation", "activeTab", "scripting"],
-  "host_permissions": ["http://*/", "https://*/"]
+  "host_permissions": ["<all_urls>"]
 }
