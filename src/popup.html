@@ -11,6 +11,26 @@
   </head>
   <body>
     <img id="logo" src="../icons/logo-32.png" width="32" height="32">
+    
+    <!-- Model Loading Progress -->
+    <div id="modelLoadingBox" style="display: none;">
+      <p id="model-status">Loading AI model...</p>
+      <div class="progress-container">
+        <div class="progress-bar">
+          <div id="progress-fill" class="progress-fill"></div>
+        </div>
+        <span id="progress-text">0%</span>
+      </div>
+    </div>
+
+    <!-- Cache Status -->
+    <div id="cacheStatus" class="cache-status">
+      <span id="cacheStatusText">Checking cache...</span>
+      <button id="clearCacheBtn" class="btn btn-small" style="display: none;">
+        <i class="fa fa-trash"></i> Clear Cache
+      </button>
+    </div>
+    
     <select id="model-selection"></select>
     <div id="loadingBox">
       <p id="init-label">Initializing model...</p>

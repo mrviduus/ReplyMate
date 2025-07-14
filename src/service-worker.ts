@@ -9,9 +9,12 @@ import {
   ChatCompletionMessageParam,
   prebuiltAppConfig,
 } from "@mlc-ai/web-llm";
+import { ModelCacheManager } from "./common/modelCache.js";
 
 let engine: MLCEngineInterface | null = null;
 let isEngineReady = false;
+const modelCacheManager = new ModelCacheManager();
+const selectedModel = "Qwen2-0.5B-Instruct-q4f16_1-MLC";
 
 // Initialize the WebLLM engine
 async function initializeEngine() {
@@ -20,15 +23,39 @@ async function initializeEngine() {
   }
 
   try {
-    const selectedModel = "Qwen2-0.5B-Instruct-q4f16_1-MLC";
-    engine = await CreateMLCEngine(selectedModel, {
-      initProgressCallback: (report) => {
-        console.log(`Loading model: ${report.text} (${(report.progress * 100).toFixed(1)}%)`);
-        if (report.progress === 1.0) {
-          isEngineReady = true;
-        }
+    // Check if model is cached first
+    const isCached = await modelCacheManager.isCached();
+    console.log(`Model cache status:`, isCached ? 'CACHED' : 'NOT CACHED');
+
+    // Send progress updates to popup if it's open
+    const progressCallback = (report: any) => {
+      console.log(`Loading model: ${report.text} (${(report.progress * 100).toFixed(1)}%)`);
+      
+      // Broadcast progress to popup
+      chrome.runtime.sendMessage({
+        type: 'modelLoadProgress',
+        progress: report.progress,
+        text: report.text
+      }).catch(() => {
+        // Popup might not be open, that's ok
+      });
+
+      if (report.progress === 1.0) {
+        isEngineReady = true;
       }
+    };
+
+    if (isCached) {
+      console.log('Using cached model weights');
+    } else {
+      console.log('Model not cached, will download fresh');
+    }
+
+    // Create the engine (WebLLM will handle caching internally)
+    engine = await CreateMLCEngine(selectedModel, {
+      initProgressCallback: progressCallback
     });
+
     return engine;
   } catch (error) {
     console.error("Failed to initialize WebLLM engine:", error);
@@ -104,6 +131,32 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
     
     // Return true to indicate we'll respond asynchronously
+    return true;
+  }
+
+  if (message.type === 'getCacheStatus') {
+    modelCacheManager.isCached()
+      .then((isCached) => {
+        sendResponse({ isCached, model: selectedModel });
+      })
+      .catch((error) => {
+        console.error('Error checking cache status:', error);
+        sendResponse({ isCached: false, error: error.message });
+      });
+    
+    return true;
+  }
+
+  if (message.type === 'clearCache') {
+    modelCacheManager.clearCache()
+      .then(() => {
+        sendResponse({ success: true });
+      })
+      .catch((error) => {
+        console.error('Error clearing cache:', error);
+        sendResponse({ success: false, error: error.message });
+      });
+    
     return true;
   }
 });

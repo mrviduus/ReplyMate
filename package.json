@@ -8,11 +8,14 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "test:ci": "jest --ci --coverage --watchAll=false"
+    "test:ci": "jest --ci --coverage --watchAll=false",
+    "cy:run": "cypress run",
+    "cy:open": "cypress open"
   },
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@cypress/browserify-preprocessor": "^3.0.2",
     "@parcel/config-webextension": "^2.9.3",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
@@ -20,6 +23,7 @@
     "@types/jest": "^30.0.0",
     "buffer": "^6.0.3",
     "chrome-types": "^0.1.361",
+    "cypress": "^14.5.1",
     "identity-obj-proxy": "^3.0.0",
     "jest": "^30.0.4",
     "jest-environment-jsdom": "^30.0.4",

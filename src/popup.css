@@ -299,3 +299,89 @@ p {
   color: #5e80a7;
   background-color: transparent;
 }
+
+/* PROGRESS BAR */
+.progress-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.progress-bar {
+  flex: 1;
+  height: 6px;
+  background-color: #E7ECF0;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background-color: #0A66C2;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+  width: 0%;
+}
+
+#progress-text {
+  font-size: 11px;
+  color: #666;
+  min-width: 35px;
+  text-align: right;
+}
+
+#modelLoadingBox {
+  background: #fff;
+  border: 1px solid #E7ECF0;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+#model-status {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+/* CACHE STATUS */
+.cache-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #F9FAFB;
+  border: 1px solid #E7ECF0;
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+  font-size: 11px;
+}
+
+#cacheStatusText {
+  color: #666;
+}
+
+.btn-small {
+  padding: 4px 8px;
+  font-size: 10px;
+  border-radius: 4px;
+}
+
+.cache-status.cached {
+  background: #EDF7ED;
+  border-color: #C6E9C6;
+}
+
+.cache-status.cached #cacheStatusText {
+  color: #1B5E1F;
+}
+
+.cache-status.not-cached {
+  background: #FEF7E0;
+  border-color: #F4D03F;
+}
+
+.cache-status.not-cached #cacheStatusText {
+  color: #8B4513;
+}

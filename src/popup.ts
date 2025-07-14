@@ -33,6 +33,10 @@ function getElementAndCheck(id: string): HTMLElement {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// Cache and model loading state
+let isModelLoading = false;
+let cacheStatusChecked = false;
+
 // Settings management
 interface Settings {
   tone: string;
@@ -91,6 +95,10 @@ let modelDisplayName = "";
 
 // throws runtime.lastError if you refresh extension AND try to access a webpage that is already open
 fetchPageContents();
+
+// Check cache status and set up progress monitoring
+checkCacheStatus();
+setupProgressMonitoring();
 
 (<HTMLButtonElement>submitButton).disabled = true;
 
@@ -341,11 +349,97 @@ function updateAnswer(answer: string) {
 
 function fetchPageContents() {
   chrome.tabs.query({ currentWindow: true, active: true }, function (tabs) {
-    const port = chrome.tabs.connect(tabs[0].id, { name: "channelName" });
-    port.postMessage({});
-    port.onMessage.addListener(function (msg) {
-      console.log("Page contents:", msg.contents);
-      context = msg.contents;
-    });
+    if (tabs[0]?.id) {
+      const port = chrome.tabs.connect(tabs[0].id, { name: "channelName" });
+      port.postMessage({});
+      port.onMessage.addListener(function (msg) {
+        console.log("Page contents:", msg.contents);
+        context = msg.contents;
+      });
+    }
   });
+}
+
+// Cache management functions
+async function checkCacheStatus(): Promise<void> {
+  if (cacheStatusChecked) return;
+  
+  const cacheStatusEl = document.getElementById('cacheStatus');
+  const cacheStatusText = document.getElementById('cacheStatusText');
+  const clearCacheBtn = document.getElementById('clearCacheBtn');
+  
+  if (!cacheStatusEl || !cacheStatusText || !clearCacheBtn) return;
+  
+  try {
+    const response = await chrome.runtime.sendMessage({ type: 'getCacheStatus' });
+    
+    if (response.isCached) {
+      cacheStatusEl.className = 'cache-status cached';
+      cacheStatusText.textContent = `Model cached (${response.model})`;
+      clearCacheBtn.style.display = 'inline-block';
+    } else {
+      cacheStatusEl.className = 'cache-status not-cached';
+      cacheStatusText.textContent = 'Model not cached - will download';
+      clearCacheBtn.style.display = 'none';
+    }
+    
+    // Set up clear cache button
+    clearCacheBtn.addEventListener('click', async () => {
+      const btn = clearCacheBtn as HTMLButtonElement;
+      btn.textContent = 'Clearing...';
+      btn.disabled = true;
+      
+      try {
+        await chrome.runtime.sendMessage({ type: 'clearCache' });
+        cacheStatusEl.className = 'cache-status not-cached';
+        cacheStatusText.textContent = 'Cache cleared';
+        clearCacheBtn.style.display = 'none';
+      } catch (error) {
+        console.error('Failed to clear cache:', error);
+        cacheStatusText.textContent = 'Failed to clear cache';
+      } finally {
+        btn.textContent = 'Clear Cache';
+        btn.disabled = false;
+      }
+    });
+    
+    cacheStatusChecked = true;
+  } catch (error) {
+    console.error('Failed to check cache status:', error);
+    cacheStatusText.textContent = 'Cache status unknown';
+  }
+}
+
+function setupProgressMonitoring(): void {
+  // Listen for model loading progress from service worker
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message.type === 'modelLoadProgress') {
+      showModelLoadingProgress(message.progress, message.text);
+    }
+  });
+}
+
+function showModelLoadingProgress(progress: number, text: string): void {
+  const loadingBox = document.getElementById('modelLoadingBox');
+  const statusEl = document.getElementById('model-status');
+  const progressFill = document.getElementById('progress-fill');
+  const progressText = document.getElementById('progress-text');
+  
+  if (!loadingBox || !statusEl || !progressFill || !progressText) return;
+  
+  if (!isModelLoading && progress < 1.0) {
+    isModelLoading = true;
+    loadingBox.style.display = 'block';
+  }
+  
+  statusEl.textContent = text;
+  progressFill.style.width = `${(progress * 100)}%`;
+  progressText.textContent = `${(progress * 100).toFixed(1)}%`;
+  
+  if (progress >= 1.0) {
+    setTimeout(() => {
+      loadingBox.style.display = 'none';
+      isModelLoading = false;
+    }, 1000);
+  }
 }
