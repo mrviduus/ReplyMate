@@ -1,6 +1,8 @@
-# WebLLM Chrome Extension
+# ReplyMate Browser Extension
 
-![Chrome Extension](https://github.com/mlc-ai/mlc-llm/assets/11940172/0d94cc73-eff1-4128-a6e4-70dc879f04e0)
+![ReplyMate Extension]
+
+An intelligent assistant for your browser.
 
 To run the extension, do the following steps under this folder
 
