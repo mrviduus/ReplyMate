@@ -3,6 +3,20 @@
  * Tests the draftComments API functionality
  */
 
+// Mock rate limiter and toast
+const mockAllowRequest = jest.fn();
+const mockShowToast = jest.fn();
+
+jest.mock('../src/common/rateLimiter', () => ({
+  defaultRateLimiter: {
+    allowRequest: mockAllowRequest
+  }
+}));
+
+jest.mock('../src/common/toast', () => ({
+  showToast: mockShowToast
+}));
+
 import { draftComments } from '../src/llmService';
 
 // Mock chrome.runtime
@@ -20,6 +34,9 @@ describe('LLM Service', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     delete (global.chrome.runtime as any).lastError;
+    
+    // Default: allow requests (rate limiter not triggered)
+    mockAllowRequest.mockReturnValue(true);
   });
 
   describe('draftComments', () => {
@@ -104,6 +121,58 @@ describe('LLM Service', () => {
       );
 
       expect(result).toEqual(mockComments);
+    });
+  });
+
+  describe('Rate Limiting', () => {
+    test('should check rate limiter before making request', async () => {
+      mockSendMessage.mockImplementation((message, callback) => {
+        callback({ comments: ['Test comment'] });
+      });
+
+      await draftComments('Test post', 1, ['professional']);
+
+      expect(mockAllowRequest).toHaveBeenCalledTimes(1);
+    });
+
+    test('should show toast and reject when rate limited', async () => {
+      mockAllowRequest.mockReturnValue(false);
+
+      await expect(draftComments('Test post', 1, ['professional']))
+        .rejects
+        .toThrow('Rate limit exceeded');
+
+      expect(mockShowToast).toHaveBeenCalledWith({
+        message: 'Slow down',
+        type: 'warning',
+        duration: 2000
+      });
+
+      expect(mockSendMessage).not.toHaveBeenCalled();
+    });
+
+    test('should proceed normally when rate limiter allows request', async () => {
+      mockAllowRequest.mockReturnValue(true);
+      mockSendMessage.mockImplementation((message, callback) => {
+        callback({ comments: ['Generated comment'] });
+      });
+
+      const result = await draftComments('Test post', 1, ['professional']);
+
+      expect(result).toEqual(['Generated comment']);
+      expect(mockShowToast).not.toHaveBeenCalled();
+      expect(mockSendMessage).toHaveBeenCalled();
+    });
+
+    test('should not show toast for successful requests', async () => {
+      mockAllowRequest.mockReturnValue(true);
+      mockSendMessage.mockImplementation((message, callback) => {
+        callback({ comments: ['Success comment'] });
+      });
+
+      await draftComments('Test post', 1, ['professional']);
+
+      expect(mockShowToast).not.toHaveBeenCalled();
     });
   });
 });

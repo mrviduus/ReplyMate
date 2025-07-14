@@ -3,6 +3,9 @@
  * Handles AI-powered comment generation for LinkedIn posts
  */
 
+import { defaultRateLimiter } from './common/rateLimiter';
+import { showToast } from './common/toast';
+
 /**
  * Generates draft comments for a LinkedIn post using AI
  * @param post - The LinkedIn post content to comment on
@@ -15,6 +18,16 @@ export async function draftComments(
   n: number, 
   personas: string[]
 ): Promise<string[]> {
+  // Check rate limiter before making request
+  if (!defaultRateLimiter.allowRequest()) {
+    showToast({
+      message: 'Slow down',
+      type: 'warning',
+      duration: 2000
+    });
+    return Promise.reject(new Error('Rate limit exceeded'));
+  }
+
   return new Promise((resolve, reject) => {
     // Send message to service worker to generate comments
     chrome.runtime.sendMessage(
