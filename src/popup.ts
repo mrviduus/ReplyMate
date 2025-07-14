@@ -13,7 +13,7 @@ import {
   ChatCompletionMessageParam,
   prebuiltAppConfig,
 } from "@mlc-ai/web-llm";
-import { ProgressBar, Line } from "progressbar.js";
+import * as ProgressBar from "progressbar.js";
 
 // modified setLabel to not throw error
 function setLabel(id: string, text: string) {
@@ -45,7 +45,7 @@ fetchPageContents();
 
 (<HTMLButtonElement>submitButton).disabled = true;
 
-let progressBar: ProgressBar = new Line("#loadingContainer", {
+let progressBar = new ProgressBar.Line("#loadingContainer", {
   strokeWidth: 4,
   easing: "easeInOut",
   duration: 1400,
@@ -221,7 +221,7 @@ async function handleSelectChange() {
 
   selectedModel = modelSelector.value;
 
-  progressBar = new Line("#loadingContainer", {
+  progressBar = new ProgressBar.Line("#loadingContainer", {
     strokeWidth: 4,
     easing: "easeInOut",
     duration: 1400,
