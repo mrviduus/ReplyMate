@@ -4,16 +4,29 @@
   "description": "An intelligent assistant for your browser.",
   "private": true,
   "scripts": {
-    "build": "parcel build src/manifest.json --config @parcel/config-webextension"
+    "build": "parcel build src/manifest.json --config @parcel/config-webextension",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:ci": "jest --ci --coverage --watchAll=false"
   },
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "@parcel/config-webextension": "^2.9.3",
+    "@testing-library/dom": "^10.4.0",
+    "@testing-library/jest-dom": "^6.6.3",
     "@types/chrome": "^0.0.242",
+    "@types/jest": "^30.0.0",
     "buffer": "^6.0.3",
+    "chrome-types": "^0.1.361",
+    "identity-obj-proxy": "^3.0.0",
+    "jest": "^30.0.4",
+    "jest-environment-jsdom": "^30.0.4",
+    "jsdom": "^26.1.0",
     "parcel": "^2.9.3",
     "process": "^0.11.10",
+    "ts-jest": "^29.4.0",
     "url": "^0.11.1"
   },
   "dependencies": {
