@@ -19,10 +19,35 @@ html {
 
 body {
   margin: 0;
-  padding: 0.5rem;
-  background-color: #778da9;
-  width: 335px;
-  font-size: small;
+  font: 14px/1.4 "Inter", sans-serif;
+}
+
+.card {
+  background: #FFF;
+  border-radius: 12px;
+  padding: 20px 24px;
+  box-shadow: 0 2px 6px rgba(0,0,0,.14);
+  width: 320px;
+}
+
+.popup-hdr {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.brand {
+  font-size: 18px;
+  font-weight: 600;
+  color: #0A66C2;
+  margin: 0;
+}
+
+.tagline {
+  font-size: 11px;
+  color: #6E6E6E;
+  margin: 0;
 }
 
 p {

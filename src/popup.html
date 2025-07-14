@@ -10,38 +10,46 @@
     />
   </head>
   <body>
-    <select id="model-selection"></select>
-    <div id="loadingBox">
-      <p id="init-label">Initializing model...</p>
-      <div id="loadingContainer"></div>
-    </div>
-    <p id="model-name"></p>
-    <div class="input-container form-group">
-      <input
-        type="search"
-        id="query-input"
-        placeholder="What's on your mind?"
-      />
-      <button id="submit-button" class="btn">
-        <i class="fa fa-comments"></i>
-      </button>
-    </div>
-
-    <div class="stage">
-      <div id="loading-indicator" class="dot-flashing"></div>
-    </div>
-
-    <div id="answerWrapper">
-      <div id="answer"></div>
-      <div class="copyRow">
-        <span id="timestamp"></span>
-        <button
-          id="copyAnswer"
-          class="btn copyButton"
-          title="Copy the Answer to the Clipboard"
-        >
-          <i class="fa-solid fa-copy fa-lg"></i>
+    <div class="card">
+      <header class="popup-hdr">
+        <img id="logo" src="icons/icon-32.png" width="32" height="32">
+        <h1 class="brand">ReplyMate</h1>
+        <p class="tagline">AI-Powered LinkedIn Replies</p>
+      </header>
+      
+      <select id="model-selection"></select>
+      <div id="loadingBox">
+        <p id="init-label">Initializing model...</p>
+        <div id="loadingContainer"></div>
+      </div>
+      <p id="model-name"></p>
+      <div class="input-container form-group">
+        <input
+          type="search"
+          id="query-input"
+          placeholder="What's on your mind?"
+        />
+        <button id="submit-button" class="btn">
+          <i class="fa fa-comments"></i>
         </button>
+      </div>
+
+      <div class="stage">
+        <div id="loading-indicator" class="dot-flashing"></div>
+      </div>
+
+      <div id="answerWrapper">
+        <div id="answer"></div>
+        <div class="copyRow">
+          <span id="timestamp"></span>
+          <button
+            id="copyAnswer"
+            class="btn copyButton"
+            title="Copy the Answer to the Clipboard"
+          >
+            <i class="fa-solid fa-copy fa-lg"></i>
+          </button>
+        </div>
       </div>
     </div>
 
