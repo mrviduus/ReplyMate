@@ -8,10 +8,9 @@ import { draftComments } from '../llmService';
 
 /**
  * Inserts a random AI-generated comment into the LinkedIn comment box
- * @param n - Number of comment options to generate
- * @param tone - The tone/persona for comment generation
+ * Uses settings from chrome.storage.sync for tone and count
  */
-export async function insertRandomComment(n: number = 3, tone: string = 'professional'): Promise<void> {
+export async function insertRandomComment(): Promise<void> {
   const { box, post } = getLiCommentBox();
   
   if (!box || !post) {
@@ -20,8 +19,13 @@ export async function insertRandomComment(n: number = 3, tone: string = 'profess
   }
 
   try {
+    // Get settings from storage
+    const settings = await chrome.storage.sync.get(['tone', 'count']);
+    const tone = settings.tone || 'friendly';
+    const count = settings.count || 3;
+    
     // Generate comment options
-    const arr = await draftComments(post, n, [tone]);
+    const arr = await draftComments(post, count, [tone]);
     
     if (arr.length === 0) {
       console.warn('No comments generated');
@@ -113,7 +117,7 @@ export function injectAIButton(): void {
       aiButton.disabled = true;
       
       try {
-        await insertRandomComment(3, 'professional');
+        await insertRandomComment();
       } catch (error) {
         console.error('AI comment insertion failed:', error);
       } finally {

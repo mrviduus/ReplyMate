@@ -10,12 +10,30 @@
     />
   </head>
   <body>
+    <img id="logo" src="../icons/logo-32.png" width="32" height="32">
     <select id="model-selection"></select>
     <div id="loadingBox">
       <p id="init-label">Initializing model...</p>
       <div id="loadingContainer"></div>
     </div>
     <p id="model-name"></p>
+    
+    <!-- Tone and Count Settings -->
+    <div class="settings-container">
+      <div class="setting-group">
+        <label for="tone">Tone:</label>
+        <select id="tone">
+          <option value="friendly">Friendly</option>
+          <option value="expert">Expert</option>
+          <option value="humorous">Humorous</option>
+        </select>
+      </div>
+      <div class="setting-group">
+        <label for="count">Count:</label>
+        <input type="number" id="count" min="1" max="5" value="3">
+      </div>
+    </div>
+    
     <div class="input-container form-group">
       <input
         type="search"

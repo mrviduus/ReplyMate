@@ -3,16 +3,34 @@
  * Tests the AI comment insertion functionality
  */
 
+// Mock chrome.storage first
+const mockStorageGet = jest.fn();
+global.chrome = {
+  ...global.chrome,
+  storage: {
+    ...global.chrome?.storage,
+    sync: {
+      get: mockStorageGet,
+      set: jest.fn(),
+    },
+  },
+} as any;
+
+// Mock modules
+jest.mock('../src/content/detector', () => ({
+  getLiCommentBox: jest.fn()
+}));
+
+jest.mock('../src/llmService', () => ({
+  draftComments: jest.fn()
+}));
+
 import { insertRandomComment, injectAIButton, initializeCommentInserter } from '../src/content/inserter';
-import * as detector from '../src/content/detector';
-import * as llmService from '../src/llmService';
+import { getLiCommentBox } from '../src/content/detector';
+import { draftComments } from '../src/llmService';
 
-// Mock the dependencies
-jest.mock('../src/content/detector');
-jest.mock('../src/llmService');
-
-const mockGetLiCommentBox = detector.getLiCommentBox as jest.MockedFunction<typeof detector.getLiCommentBox>;
-const mockDraftComments = llmService.draftComments as jest.MockedFunction<typeof llmService.draftComments>;
+const mockGetLiCommentBox = getLiCommentBox as jest.MockedFunction<typeof getLiCommentBox>;
+const mockDraftComments = draftComments as jest.MockedFunction<typeof draftComments>;
 
 describe('Comment Inserter', () => {
   let mockCommentBox: HTMLElement;
@@ -28,6 +46,9 @@ describe('Comment Inserter', () => {
     // Mock console methods
     consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+    
+    // Mock storage with default values
+    mockStorageGet.mockResolvedValue({ tone: 'friendly', count: 3 });
     
     // Clear DOM
     document.body.innerHTML = '';
@@ -55,10 +76,13 @@ describe('Comment Inserter', () => {
       // Spy on dispatchEvent
       const dispatchEventSpy = jest.spyOn(mockCommentBox, 'dispatchEvent');
       
-      await insertRandomComment(3, 'professional');
+      await insertRandomComment();
       
-      // Verify draftComments was called correctly
-      expect(mockDraftComments).toHaveBeenCalledWith(mockPost, 3, ['professional']);
+      // Verify storage was queried
+      expect(mockStorageGet).toHaveBeenCalledWith(['tone', 'count']);
+      
+      // Verify draftComments was called with stored settings
+      expect(mockDraftComments).toHaveBeenCalledWith(mockPost, 3, ['friendly']);
       
       // Verify comment was inserted
       expect(mockComments).toContain(mockCommentBox.textContent);
@@ -70,6 +94,21 @@ describe('Comment Inserter', () => {
           bubbles: true
         })
       );
+    });
+
+    test('should use default values when storage is empty', async () => {
+      mockStorageGet.mockResolvedValue({});
+      
+      mockGetLiCommentBox.mockReturnValue({
+        box: mockCommentBox,
+        post: 'Test post'
+      });
+      
+      mockDraftComments.mockResolvedValue(['Test comment']);
+      
+      await insertRandomComment();
+      
+      expect(mockDraftComments).toHaveBeenCalledWith('Test post', 3, ['friendly']);
     });
 
     test('should warn when no comment box found', async () => {
@@ -124,17 +163,19 @@ describe('Comment Inserter', () => {
       expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to insert AI comment:', mockError);
     });
 
-    test('should use default parameters', async () => {
+    test('should handle custom tone and count from storage', async () => {
+      mockStorageGet.mockResolvedValue({ tone: 'expert', count: 5 });
+      
       mockGetLiCommentBox.mockReturnValue({
         box: mockCommentBox,
         post: 'Test post'
       });
       
-      mockDraftComments.mockResolvedValue(['Test comment']);
+      mockDraftComments.mockResolvedValue(['Expert comment']);
       
       await insertRandomComment();
       
-      expect(mockDraftComments).toHaveBeenCalledWith('Test post', 3, ['professional']);
+      expect(mockDraftComments).toHaveBeenCalledWith('Test post', 5, ['expert']);
     });
   });
 

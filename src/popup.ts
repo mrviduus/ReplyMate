@@ -33,6 +33,55 @@ function getElementAndCheck(id: string): HTMLElement {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// Settings management
+interface Settings {
+  tone: string;
+  count: number;
+}
+
+const defaultSettings: Settings = {
+  tone: 'friendly',
+  count: 3
+};
+
+// Initialize settings UI and load saved values
+async function initializeSettings(): Promise<void> {
+  const toneSelect = document.getElementById('tone') as HTMLSelectElement;
+  const countInput = document.getElementById('count') as HTMLInputElement;
+  
+  // Load saved settings
+  const saved = await chrome.storage.sync.get(['tone', 'count']);
+  const settings: Settings = {
+    tone: saved.tone || defaultSettings.tone,
+    count: saved.count || defaultSettings.count
+  };
+  
+  // Apply to UI
+  toneSelect.value = settings.tone;
+  countInput.value = settings.count.toString();
+  
+  // Set up event listeners to save changes
+  toneSelect.addEventListener('change', () => {
+    chrome.storage.sync.set({ tone: toneSelect.value });
+  });
+  
+  countInput.addEventListener('change', () => {
+    const value = parseInt(countInput.value);
+    if (value >= 1 && value <= 5) {
+      chrome.storage.sync.set({ count: value });
+    }
+  });
+}
+
+// Get current settings
+async function getCurrentSettings(): Promise<Settings> {
+  const saved = await chrome.storage.sync.get(['tone', 'count']);
+  return {
+    tone: saved.tone || defaultSettings.tone,
+    count: saved.count || defaultSettings.count
+  };
+}
+
 const queryInput = getElementAndCheck("query-input")!;
 const submitButton = getElementAndCheck("submit-button")!;
 const modelName = getElementAndCheck("model-name");
@@ -88,6 +137,9 @@ for (let i = 0; i < prebuiltAppConfig.model_list.length; ++i) {
 
   modelSelector.appendChild(opt);
 }
+
+// Initialize settings UI
+initializeSettings();
 
 modelName.innerText = "Loading initial model...";
 const engine: MLCEngineInterface = await CreateMLCEngine(selectedModel, {

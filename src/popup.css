@@ -20,13 +20,20 @@ html {
 body {
   margin: 0;
   padding: 0.5rem;
-  background-color: #778da9;
+  background: #F3F6F8;
+  color: #1D2226;
   width: 335px;
   font-size: small;
 }
 
 p {
   margin: 0;
+}
+
+/* LOGO */
+#logo {
+  display: block;
+  margin: 0 auto 16px auto;
 }
 
 /* LOADING BAR */
@@ -39,7 +46,55 @@ p {
 /* INPUT AREA */
 #query-input {
   border: 1px solid #ccc;
-  border-radius: 4px;
+  border-radius: 8px;
+}
+
+/* SETTINGS CONTAINER */
+.settings-container {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.setting-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.setting-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.setting-group select,
+.setting-group input {
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 14px;
+  background-color: #fff;
+  transition: border-color 0.2s ease;
+}
+
+.setting-group select:focus,
+.setting-group input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.setting-group input[type="number"] {
+  text-align: center;
+  width: 60px;
 }
 
 .input-container {
@@ -57,23 +112,29 @@ p {
 
 /* BUTTON */
 .btn {
-  background-color: #1b263b;
-  color: white;
+  background: #0A66C2;
+  border-radius: 20px;
+  color: #fff;
   font-size: small;
   cursor: pointer;
-  border-radius: 4px;
   border: none;
   padding: 0.5rem;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 .btn:hover {
-  background-color: #d0d0d0;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+  background: #004182;
 }
 
 .btn:disabled {
-  background-color: #a7a7a7;
-  color: rgb(255, 255, 255);
-  cursor: default;
+  background: #e9ecef;
+  color: #6c757d;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
 
 .btn img {
