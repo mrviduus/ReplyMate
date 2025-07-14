@@ -37,6 +37,8 @@ describe('Toast Notifications', () => {
       className: '',
       textContent: '',
       style: {},
+      appendChild: jest.fn(),
+      addEventListener: jest.fn(),
       parentNode: {
         removeChild: jest.fn()
       }
@@ -221,6 +223,50 @@ describe('Toast Notifications', () => {
       expect(mockElement.textContent).toBe(longMessage);
       expect(mockElement.style.maxWidth).toBe('300px');
       expect(mockElement.style.wordWrap).toBe('break-word');
+    });
+  });
+
+  describe('Toast with action button', () => {
+    test('should create message and button elements when action provided', () => {
+      const mockCallback = jest.fn();
+      
+      showToast({
+        message: 'Test with action',
+        action: {
+          label: 'Undo',
+          callback: mockCallback
+        }
+      });
+
+      // Should create div, span, and button elements
+      expect(document.createElement).toHaveBeenCalledWith('div');
+      expect(document.createElement).toHaveBeenCalledWith('span');
+      expect(document.createElement).toHaveBeenCalledWith('button');
+    });
+
+    test('should only create message elements when no action provided', () => {
+      showToast('Test without action');
+
+      // Should create div and span elements only
+      expect(document.createElement).toHaveBeenCalledWith('div');
+      expect(document.createElement).toHaveBeenCalledWith('span');
+      expect(document.createElement).not.toHaveBeenCalledWith('button');
+    });
+
+    test('should apply flexbox layout for action toasts', () => {
+      const mockCallback = jest.fn();
+      
+      showToast({
+        message: 'Test with action',
+        action: {
+          label: 'Undo',
+          callback: mockCallback
+        }
+      });
+
+      expect(mockElement.style.display).toBe('flex');
+      expect(mockElement.style.alignItems).toBe('center');
+      expect(mockElement.style.justifyContent).toBe('space-between');
     });
   });
 });

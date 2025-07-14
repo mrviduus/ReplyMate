@@ -10,6 +10,11 @@ export interface ToastOptions {
   type?: 'info' | 'warning' | 'error' | 'success';
   /** Duration in milliseconds (default: 3000) */
   duration?: number;
+  /** Optional action button */
+  action?: {
+    label: string;
+    callback: () => void;
+  };
 }
 
 /**
@@ -24,7 +29,37 @@ export function showToast(options: ToastOptions | string): void {
   // Create toast element
   const toast = document.createElement('div');
   toast.className = `ai-extension-toast ai-extension-toast--${config.type}`;
-  toast.textContent = config.message;
+  
+  // Create message element
+  const messageElement = document.createElement('span');
+  messageElement.textContent = config.message;
+  toast.appendChild(messageElement);
+  
+  // Add action button if provided
+  if (config.action) {
+    const actionButton = document.createElement('button');
+    actionButton.textContent = config.action.label;
+    actionButton.style.cssText = `
+      background: rgba(255,255,255,0.2);
+      border: 1px solid rgba(255,255,255,0.3);
+      color: inherit;
+      border-radius: 4px;
+      padding: 4px 8px;
+      margin-left: 12px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+    `;
+    
+    actionButton.addEventListener('click', () => {
+      config.action!.callback();
+      if (toast.parentNode) {
+        toast.parentNode.removeChild(toast);
+      }
+    });
+    
+    toast.appendChild(actionButton);
+  }
 
   // Apply styles
   Object.assign(toast.style, {
@@ -43,7 +78,10 @@ export function showToast(options: ToastOptions | string): void {
     transform: 'translateX(100%)',
     transition: 'all 0.3s ease',
     maxWidth: '300px',
-    wordWrap: 'break-word'
+    wordWrap: 'break-word',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between'
   });
 
   // Add to page

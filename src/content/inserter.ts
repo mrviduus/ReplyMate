@@ -5,6 +5,16 @@
 
 import { getLiCommentBox } from './detector';
 import { draftComments } from '../llmService';
+import { showToast } from '../common/toast';
+
+// Track the last state for undo functionality
+interface UndoState {
+  box: HTMLElement;
+  previousText: string;
+  insertedText: string;
+}
+
+let lastUndoState: UndoState | null = null;
 
 /**
  * Inserts a random AI-generated comment into the LinkedIn comment box
@@ -19,6 +29,9 @@ export async function insertRandomComment(): Promise<void> {
   }
 
   try {
+    // Store previous state for undo
+    const previousText = box.textContent || '';
+    
     // Get settings from storage
     const settings = await chrome.storage.sync.get(['tone', 'count']);
     const tone = settings.tone || 'friendly';
@@ -38,12 +51,66 @@ export async function insertRandomComment(): Promise<void> {
     // Insert comment into the box
     box.textContent = randomComment;
     
+    // Store undo state
+    lastUndoState = {
+      box,
+      previousText,
+      insertedText: randomComment
+    };
+    
     // Trigger input event to notify LinkedIn's systems
     box.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    
+    // Copy to clipboard
+    try {
+      await navigator.clipboard.writeText(randomComment);
+    } catch (clipboardError) {
+      console.warn('Failed to copy to clipboard:', clipboardError);
+    }
+    
+    // Show success toast with undo option
+    showToast({
+      message: 'Inserted',
+      type: 'success',
+      duration: 6000,
+      action: {
+        label: 'Undo',
+        callback: undoLastInsertion
+      }
+    });
     
   } catch (error) {
     console.error('Failed to insert AI comment:', error);
   }
+}
+
+/**
+ * Undoes the last comment insertion
+ */
+export function undoLastInsertion(): void {
+  if (!lastUndoState) {
+    showToast({
+      message: 'Nothing to undo',
+      type: 'info',
+      duration: 2000
+    });
+    return;
+  }
+
+  // Restore previous text
+  lastUndoState.box.textContent = lastUndoState.previousText;
+  
+  // Trigger input event
+  lastUndoState.box.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  
+  // Clear undo state
+  lastUndoState = null;
+  
+  showToast({
+    message: 'Undone',
+    type: 'info',
+    duration: 2000
+  });
 }
 
 /**
@@ -66,6 +133,8 @@ export function injectAIButton(): void {
       top: 8px;
       right: 8px;
       z-index: 1000;
+      display: flex;
+      gap: 4px;
     `;
     
     // Position the shadow host relative to the comment box
@@ -78,10 +147,8 @@ export function injectAIButton(): void {
     // Create shadow DOM
     const shadowRoot = shadowHost.attachShadow({ mode: 'closed' });
     
-    // Create AI button
-    const aiButton = document.createElement('button');
-    aiButton.innerHTML = '✨ AI';
-    aiButton.style.cssText = `
+    // Common button styles
+    const buttonBaseStyle = `
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
       border: none;
@@ -95,18 +162,35 @@ export function injectAIButton(): void {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     `;
     
-    // Add hover effects
-    aiButton.addEventListener('mouseenter', () => {
-      aiButton.style.transform = 'translateY(-1px)';
-      aiButton.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
+    // Create button container
+    const buttonContainer = document.createElement('div');
+    buttonContainer.style.cssText = 'display: flex; gap: 4px;';
+    
+    // Create AI button
+    const aiButton = document.createElement('button');
+    aiButton.innerHTML = '✨ AI';
+    aiButton.style.cssText = buttonBaseStyle;
+    
+    // Create regenerate button
+    const regenerateButton = document.createElement('button');
+    regenerateButton.innerHTML = '🔄';
+    regenerateButton.style.cssText = buttonBaseStyle;
+    regenerateButton.title = 'Regenerate comment';
+    
+    // Add hover effects for both buttons
+    [aiButton, regenerateButton].forEach(button => {
+      button.addEventListener('mouseenter', () => {
+        button.style.transform = 'translateY(-1px)';
+        button.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
+      });
+      
+      button.addEventListener('mouseleave', () => {
+        button.style.transform = 'translateY(0)';
+        button.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+      });
     });
     
-    aiButton.addEventListener('mouseleave', () => {
-      aiButton.style.transform = 'translateY(0)';
-      aiButton.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
-    });
-    
-    // Add click handler
+    // AI button click handler
     aiButton.addEventListener('click', async (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -115,6 +199,7 @@ export function injectAIButton(): void {
       const originalText = aiButton.innerHTML;
       aiButton.innerHTML = '⏳';
       aiButton.disabled = true;
+      regenerateButton.disabled = true;
       
       try {
         await insertRandomComment();
@@ -124,10 +209,36 @@ export function injectAIButton(): void {
         // Restore button state
         aiButton.innerHTML = originalText;
         aiButton.disabled = false;
+        regenerateButton.disabled = false;
       }
     });
     
-    shadowRoot.appendChild(aiButton);
+    // Regenerate button click handler
+    regenerateButton.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Show loading state
+      const originalText = regenerateButton.innerHTML;
+      regenerateButton.innerHTML = '⏳';
+      regenerateButton.disabled = true;
+      aiButton.disabled = true;
+      
+      try {
+        await insertRandomComment();
+      } catch (error) {
+        console.error('AI comment regeneration failed:', error);
+      } finally {
+        // Restore button state
+        regenerateButton.innerHTML = originalText;
+        regenerateButton.disabled = false;
+        aiButton.disabled = false;
+      }
+    });
+    
+    buttonContainer.appendChild(aiButton);
+    buttonContainer.appendChild(regenerateButton);
+    shadowRoot.appendChild(buttonContainer);
   });
 }
 

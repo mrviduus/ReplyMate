@@ -25,12 +25,27 @@ jest.mock('../src/llmService', () => ({
   draftComments: jest.fn()
 }));
 
-import { insertRandomComment, injectAIButton, initializeCommentInserter } from '../src/content/inserter';
+jest.mock('../src/common/toast', () => ({
+  showToast: jest.fn()
+}));
+
+// Mock navigator.clipboard
+Object.defineProperty(navigator, 'clipboard', {
+  value: {
+    writeText: jest.fn()
+  },
+  writable: true
+});
+
+import { insertRandomComment, injectAIButton, initializeCommentInserter, undoLastInsertion } from '../src/content/inserter';
 import { getLiCommentBox } from '../src/content/detector';
 import { draftComments } from '../src/llmService';
+import { showToast } from '../src/common/toast';
 
 const mockGetLiCommentBox = getLiCommentBox as jest.MockedFunction<typeof getLiCommentBox>;
 const mockDraftComments = draftComments as jest.MockedFunction<typeof draftComments>;
+const mockShowToast = showToast as jest.MockedFunction<typeof showToast>;
+const mockClipboardWriteText = navigator.clipboard.writeText as jest.MockedFunction<typeof navigator.clipboard.writeText>;
 
 describe('Comment Inserter', () => {
   let mockCommentBox: HTMLElement;
@@ -50,6 +65,9 @@ describe('Comment Inserter', () => {
     // Mock storage with default values
     mockStorageGet.mockResolvedValue({ tone: 'friendly', count: 3 });
     
+    // Mock clipboard
+    mockClipboardWriteText.mockResolvedValue();
+    
     // Clear DOM
     document.body.innerHTML = '';
     
@@ -62,7 +80,7 @@ describe('Comment Inserter', () => {
   });
 
   describe('insertRandomComment', () => {
-    test('should insert random comment when box and post are available', async () => {
+    test('should insert random comment and copy to clipboard', async () => {
       const mockPost = 'Test LinkedIn post content';
       const mockComments = ['Great insight!', 'Thanks for sharing!', 'Very informative!'];
       
@@ -94,6 +112,39 @@ describe('Comment Inserter', () => {
           bubbles: true
         })
       );
+      
+      // Verify clipboard copy
+      expect(mockClipboardWriteText).toHaveBeenCalledWith(mockCommentBox.textContent);
+      
+      // Verify success toast with undo action
+      expect(mockShowToast).toHaveBeenCalledWith({
+        message: 'Inserted',
+        type: 'success',
+        duration: 6000,
+        action: {
+          label: 'Undo',
+          callback: expect.any(Function)
+        }
+      });
+    });
+
+    test('should handle clipboard error gracefully', async () => {
+      mockGetLiCommentBox.mockReturnValue({
+        box: mockCommentBox,
+        post: 'Test post'
+      });
+      
+      mockDraftComments.mockResolvedValue(['Test comment']);
+      mockClipboardWriteText.mockRejectedValue(new Error('Clipboard access denied'));
+      
+      // Should not throw error
+      await expect(insertRandomComment()).resolves.not.toThrow();
+      
+      // Should still show success toast
+      expect(mockShowToast).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'Inserted',
+        type: 'success'
+      }));
     });
 
     test('should use default values when storage is empty', async () => {
@@ -121,6 +172,7 @@ describe('Comment Inserter', () => {
       
       expect(consoleWarnSpy).toHaveBeenCalledWith('No LinkedIn comment box or post content found');
       expect(mockDraftComments).not.toHaveBeenCalled();
+      expect(mockShowToast).not.toHaveBeenCalled();
     });
 
     test('should warn when no post content found', async () => {
@@ -133,6 +185,7 @@ describe('Comment Inserter', () => {
       
       expect(consoleWarnSpy).toHaveBeenCalledWith('No LinkedIn comment box or post content found');
       expect(mockDraftComments).not.toHaveBeenCalled();
+      expect(mockShowToast).not.toHaveBeenCalled();
     });
 
     test('should warn when no comments generated', async () => {
@@ -146,6 +199,7 @@ describe('Comment Inserter', () => {
       await insertRandomComment();
       
       expect(consoleWarnSpy).toHaveBeenCalledWith('No comments generated');
+      expect(mockShowToast).not.toHaveBeenCalled();
     });
 
     test('should handle draftComments error', async () => {
@@ -161,6 +215,7 @@ describe('Comment Inserter', () => {
       await insertRandomComment();
       
       expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to insert AI comment:', mockError);
+      expect(mockShowToast).not.toHaveBeenCalled();
     });
 
     test('should handle custom tone and count from storage', async () => {
@@ -176,6 +231,84 @@ describe('Comment Inserter', () => {
       await insertRandomComment();
       
       expect(mockDraftComments).toHaveBeenCalledWith('Test post', 5, ['expert']);
+    });
+  });
+
+  describe('undoLastInsertion', () => {
+    test('should undo last insertion when undo state exists', async () => {
+      // First, insert a comment to create undo state
+      mockGetLiCommentBox.mockReturnValue({
+        box: mockCommentBox,
+        post: 'Test post'
+      });
+      
+      mockDraftComments.mockResolvedValue(['AI generated comment']);
+      mockCommentBox.textContent = 'Original text';
+      
+      await insertRandomComment();
+      
+      // Clear previous toast calls
+      mockShowToast.mockClear();
+      
+      // Now test undo
+      const dispatchEventSpy = jest.spyOn(mockCommentBox, 'dispatchEvent');
+      
+      undoLastInsertion();
+      
+      // Should restore original text
+      expect(mockCommentBox.textContent).toBe('Original text');
+      
+      // Should dispatch input event
+      expect(dispatchEventSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'input',
+          bubbles: true
+        })
+      );
+      
+      // Should show undo toast
+      expect(mockShowToast).toHaveBeenCalledWith({
+        message: 'Undone',
+        type: 'info',
+        duration: 2000
+      });
+    });
+
+    test('should show info message when nothing to undo', () => {
+      undoLastInsertion();
+      
+      expect(mockShowToast).toHaveBeenCalledWith({
+        message: 'Nothing to undo',
+        type: 'info',
+        duration: 2000
+      });
+    });
+
+    test('should clear undo state after undoing', async () => {
+      // First, insert a comment
+      mockGetLiCommentBox.mockReturnValue({
+        box: mockCommentBox,
+        post: 'Test post'
+      });
+      
+      mockDraftComments.mockResolvedValue(['AI comment']);
+      
+      await insertRandomComment();
+      
+      // Undo once
+      undoLastInsertion();
+      
+      // Clear mock calls
+      mockShowToast.mockClear();
+      
+      // Try to undo again - should show "Nothing to undo"
+      undoLastInsertion();
+      
+      expect(mockShowToast).toHaveBeenCalledWith({
+        message: 'Nothing to undo',
+        type: 'info',
+        duration: 2000
+      });
     });
   });
 
