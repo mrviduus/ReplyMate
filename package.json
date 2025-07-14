@@ -1,6 +1,6 @@
 {
   "name": "replymate-extension",
-  "version": "1.0.1",
+  "version": "0.1.0",
   "description": "An intelligent assistant for your browser.",
   "private": true,
   "scripts": {

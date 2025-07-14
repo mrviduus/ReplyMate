@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ReplyMate",
-  "version": "0.1.1",
+  "version": "0.1.0",
   "description": "An intelligent assistant for your browser.",
   "icons": {
     "16": "icons/logo-16.png",
@@ -21,7 +21,8 @@
     }
   },
   "background": {
-    "service_worker": "service-worker.js"
+    "service_worker": "service-worker.ts",
+    "type": "module"
   },
   "content_scripts": [
     {
