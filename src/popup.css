@@ -19,10 +19,113 @@ html {
 
 body {
   margin: 0;
-  padding: 0.5rem;
-  background-color: #778da9;
-  width: 335px;
-  font-size: small;
+  font: 14px/1.4 "Inter", sans-serif;
+}
+
+.card {
+  background: #FFF;
+  border-radius: 12px;
+  padding: 20px 24px;
+  box-shadow: 0 2px 6px rgba(0,0,0,.14);
+  width: 320px;
+}
+
+.popup-hdr {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.brand {
+  font-size: 18px;
+  font-weight: 600;
+  color: #0A66C2;
+  margin: 0;
+}
+
+.tagline {
+  font-size: 11px;
+  color: #6E6E6E;
+  margin: 0;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 6px 0;
+}
+
+.pill {
+  padding: 2px 8px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.pill.pass {
+  background: #E7F9ED;
+  color: #27C46A;
+}
+
+.pill.info {
+  background: #E6F4FF;
+  color: #0A66C2;
+}
+
+.switch {
+  display: inline-block;
+  width: 34px;
+  height: 18px;
+  position: relative;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #CDD1D4;
+  border-radius: 18px;
+  transition: .2s;
+}
+
+.slider:before {
+  content: "";
+  position: absolute;
+  height: 14px;
+  width: 14px;
+  left: 2px;
+  top: 2px;
+  background: #fff;
+  border-radius: 50%;
+  transition: .2s;
+}
+
+.switch input:checked + .slider {
+  background: #0A66C2;
+}
+
+.switch input:checked + .slider:before {
+  transform: translateX(16px);
+}
+
+select.select {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #CED0D4;
+  border-radius: 6px;
+  background: #F8F9F9;
+  font-size: 13px;
 }
 
 p {
