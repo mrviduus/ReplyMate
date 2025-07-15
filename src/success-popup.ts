@@ -1,8 +1,8 @@
-// success-popup.ts - Auto-dismiss functionality with countdown (TypeScript version)
+// success-popup.ts - Auto-close functionality (TypeScript version)
 
 import "./success-popup.css";
 
-console.log('Auto-dismiss popup initialized');
+console.log('Auto-close popup initialized');
 
 // Type definitions
 interface CountdownConfig {
@@ -18,56 +18,64 @@ const config: CountdownConfig = {
 
 // State management
 let timeLeft: number = config.initialTime;
-let shouldRedirect: boolean = true; // Flag to control redirect behavior
+let countdownTimer: ReturnType<typeof setInterval> | null = null;
+let autoCloseTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Initialize on DOM content loaded
 document.addEventListener('DOMContentLoaded', (): void => {
-  console.log('Auto-dismiss timer started - closing in 7 seconds');
+  console.log('Auto-close timer started - closing in 7 seconds');
   
   const countdownElement: HTMLElement | null = document.querySelector('.countdown');
-  const redirectMessageElement: HTMLElement | null = document.querySelector('.redirect-message');
+  const closeBtn: HTMLButtonElement | null = document.querySelector('#close-btn');
+  const redirectBtn: HTMLButtonElement | null = document.querySelector('#redirect-btn');
+
+  // Button event listeners
+  closeBtn?.addEventListener('click', (): void => {
+    console.log('Close button clicked - closing popup');
+    clearTimers();
+    window.close();
+  });
+
+  redirectBtn?.addEventListener('click', (): void => {
+    console.log('Redirect button clicked - redirecting to LinkedIn');
+    clearTimers();
+    chrome.runtime.sendMessage({ type: 'SUCCESS_REDIRECT' });
+    window.close();
+  });
+
+  // Function to clear all timers
+  const clearTimers = (): void => {
+    if (countdownTimer) clearInterval(countdownTimer);
+    if (autoCloseTimer) clearTimeout(autoCloseTimer);
+  };
 
   // Listen for beforeunload to detect manual close
   window.addEventListener('beforeunload', (): void => {
-    shouldRedirect = false;
-    console.log('Popup manually closed - redirect cancelled');
+    clearTimers();
+    console.log('Popup manually closed');
   });
 
-  // Countdown timer function
-  const countdown = setInterval((): void => {
+  // Countdown timer function (just counts down, no redirect)
+  countdownTimer = setInterval((): void => {
     timeLeft--;
     
     if (countdownElement) {
       if (timeLeft > 0) {
         const secondText: string = timeLeft !== 1 ? 's' : '';
         countdownElement.textContent = `Closing in ${timeLeft} second${secondText}...`;
-        
-        // Update redirect message
-        if (redirectMessageElement) {
-          const redirectSecondText: string = timeLeft !== 1 ? 's' : '';
-          redirectMessageElement.textContent = `You will be redirected to LinkedIn in ${timeLeft} second${redirectSecondText}...`;
-        }
       } else {
         countdownElement.textContent = 'Closing now...';
-        if (redirectMessageElement) {
-          redirectMessageElement.textContent = 'Redirecting to LinkedIn...';
-        }
-        clearInterval(countdown);
+        if (countdownTimer) clearInterval(countdownTimer);
       }
     }
   }, 1000);
 
-  // Auto-close function with redirect
+  // Auto-close function (just closes, no redirect)
   const autoClosePopup = (): void => {
-    if (shouldRedirect) {
-      console.log('Auto-closing popup after 7 seconds - redirecting to LinkedIn');
-      chrome.runtime.sendMessage({ type: 'SUCCESS_REDIRECT' });
-    } else {
-      console.log('Auto-close triggered but redirect was cancelled due to manual close');
-    }
+    console.log('Auto-closing popup after 7 seconds - no redirect');
     window.close();
   };
 
   // Set auto-close timer
-  setTimeout(autoClosePopup, config.autoCloseDelay);
+  autoCloseTimer = setTimeout(autoClosePopup, config.autoCloseDelay);
 });
