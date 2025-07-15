@@ -16,12 +16,21 @@
     "default_title": "ReplyMate",
     "default_popup": "popup.html"
   },
+  "background": {
+    "service_worker": "success-background.ts"
+  },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
       "js": ["content.js"]
     }
   ],
-  "permissions": ["storage", "tabs", "webNavigation", "activeTab", "scripting"],
-  "host_permissions": ["<all_urls>"]
+  "permissions": ["storage", "tabs", "webNavigation", "activeTab", "scripting", "windows"],
+  "host_permissions": ["<all_urls>"],
+  "web_accessible_resources": [
+    {
+      "resources": ["success-popup.html", "success-popup.css"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }

@@ -43,6 +43,9 @@ let modelDisplayName = "";
 // throws runtime.lastError if you refresh extension AND try to access a webpage that is already open
 fetchPageContents();
 
+// Redirect to LinkedIn if not already there
+redirectToLinkedIn();
+
 (<HTMLButtonElement>submitButton).disabled = true;
 
 let progressBar = new ProgressBar.Line("#loadingContainer", {
@@ -289,11 +292,23 @@ function updateAnswer(answer: string) {
 
 function fetchPageContents() {
   chrome.tabs.query({ currentWindow: true, active: true }, function (tabs) {
-    const port = chrome.tabs.connect(tabs[0].id, { name: "channelName" });
-    port.postMessage({});
-    port.onMessage.addListener(function (msg) {
-      console.log("Page contents:", msg.contents);
-      context = msg.contents;
-    });
+    if (tabs[0]?.id !== undefined) {
+      const port = chrome.tabs.connect(tabs[0].id, { name: "channelName" });
+      port.postMessage({});
+      port.onMessage.addListener(function (msg) {
+        console.log("Page contents:", msg.contents);
+        context = msg.contents;
+      });
+    }
+  });
+}
+
+function redirectToLinkedIn() {
+  chrome.tabs.query({ currentWindow: true, active: true }, function (tabs) {
+    if (tabs[0]?.url && !tabs[0].url.includes("linkedin.com")) {
+      chrome.tabs.update(tabs[0].id!, {
+        url: "https://www.linkedin.com"
+      });
+    }
   });
 }
