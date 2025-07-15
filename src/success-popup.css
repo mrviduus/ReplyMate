@@ -72,6 +72,21 @@ body {
   color: #166534;
 }
 
+.redirect-info {
+  margin: 16px 0;
+  padding: 12px;
+  background: #eff6ff;
+  border-radius: 8px;
+  border-left: 4px solid #3b82f6;
+}
+
+.redirect-message {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #1e40af;
+  font-weight: 500;
+}
+
 .countdown {
   font-size: 0.875rem;
   color: #6b7280;
