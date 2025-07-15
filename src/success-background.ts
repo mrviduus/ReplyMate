@@ -5,6 +5,8 @@ console.log('Background service worker loaded');
 // Extension installation event handler
 chrome.runtime.onInstalled.addListener((details: chrome.runtime.InstalledDetails): void => {
   console.log('Extension installed:', details.reason);
+  // Mark extension as used since we're showing the success popup
+  chrome.storage.local.set({ hasUsedExtension: true });
   showSuccessPopup();
 });
 

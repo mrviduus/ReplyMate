@@ -43,9 +43,6 @@ let modelDisplayName = "";
 // throws runtime.lastError if you refresh extension AND try to access a webpage that is already open
 fetchPageContents();
 
-// Redirect to LinkedIn if not already there
-redirectToLinkedIn();
-
 (<HTMLButtonElement>submitButton).disabled = true;
 
 let progressBar = new ProgressBar.Line("#loadingContainer", {
@@ -298,16 +295,6 @@ function fetchPageContents() {
       port.onMessage.addListener(function (msg) {
         console.log("Page contents:", msg.contents);
         context = msg.contents;
-      });
-    }
-  });
-}
-
-function redirectToLinkedIn() {
-  chrome.tabs.query({ currentWindow: true, active: true }, function (tabs) {
-    if (tabs[0]?.url && !tabs[0].url.includes("linkedin.com")) {
-      chrome.tabs.update(tabs[0].id!, {
-        url: "https://www.linkedin.com"
       });
     }
   });
