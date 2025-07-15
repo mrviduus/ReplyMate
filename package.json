@@ -18,6 +18,7 @@
     "@testing-library/jest-dom": "^6.6.3",
     "@types/chrome": "^0.0.242",
     "@types/jest": "^30.0.0",
+    "@types/progressbar.js": "^1.1.7",
     "buffer": "^6.0.3",
     "chrome-types": "^0.1.361",
     "identity-obj-proxy": "^3.0.0",
