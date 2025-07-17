@@ -13,6 +13,7 @@
 3. Enable "Developer mode" (toggle in top-right)
 4. Click "Load unpacked"
 5. Select the `dist` folder: `/Users/vasylvdovychenko/projects/ReplyMate/beta-04/ReplyMate/dist`
+6. The extension should install without any success popup (simplified installation)
 
 ## Testing AI Reply Generation on LinkedIn
 

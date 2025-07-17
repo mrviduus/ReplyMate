@@ -37,7 +37,7 @@
   "host_permissions": ["<all_urls>"],
   "web_accessible_resources": [
     {
-      "resources": ["success-popup.html", "success-popup.css", "linkedin-styles.css"],
+      "resources": ["linkedin-styles.css"],
       "matches": ["<all_urls>"]
     }
   ]

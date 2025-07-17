@@ -126,7 +126,7 @@ src/
 ├── content.js                # General content script
 ├── linkedin-content.ts       # LinkedIn-specific functionality
 ├── linkedin-styles.css       # LinkedIn-specific styling
-├── success-background.ts     # Background service worker
+├── background.ts             # Background service worker with AI engine
 └── icons/                    # Extension icons
 
 tests/

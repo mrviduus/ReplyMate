@@ -71,21 +71,19 @@ async function handleLinkedInReplyRequest(request: any, sendResponse: (response:
   }
 }
 
-// Function to show success popup
+// Function to show success notification (console log only)
 async function showSuccessPopup(): Promise<void> {
   try {
-    // Create a new tab/window with the success popup
-    const popup = await chrome.windows.create({
-      url: chrome.runtime.getURL('success-popup.html'),
-      type: 'popup',
-      width: 400,
-      height: 300,
-      focused: true
-    });
-    
-    console.log('Success popup window created:', popup.id);
+    console.log('ReplyMate Extension: Successfully loaded and ready to use on LinkedIn');
+    // Optional: Could show a browser notification instead
+    // chrome.notifications.create({
+    //   type: 'basic',
+    //   iconUrl: 'icons/icon-64.png',
+    //   title: 'ReplyMate Extension',
+    //   message: 'Successfully loaded and ready to use!'
+    // });
   } catch (error: unknown) {
     const errorMessage: string = error instanceof Error ? error.message : 'Unknown error';
-    console.log('Could not create success popup:', errorMessage);
+    console.log('ReplyMate Extension ready, with minor setup note:', errorMessage);
   }
 }
