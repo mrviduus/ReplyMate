@@ -90,10 +90,8 @@ for (let i = 0; i < prebuiltAppConfig.model_list.length; ++i) {
 }
 
 modelName.innerText = "Loading initial model...";
-const engine: MLCEngineInterface = await CreateMLCEngine(selectedModel, {
-  initProgressCallback: initProgressCallback,
-});
-modelName.innerText = "Now chatting with " + modelDisplayName;
+// Remove direct engine initialization - will be done in DOMContentLoaded
+let engine: MLCEngineInterface;
 
 let chatHistory: ChatCompletionMessageParam[] = [];
 
@@ -144,6 +142,12 @@ queryInput.addEventListener("keyup", (event) => {
 
 // Listen for clicks on submit button
 async function handleClick() {
+  const popupEngine = (window as any).popupEngine;
+  if (!popupEngine) {
+    updateAnswer("Chat AI not ready. Please wait for initialization to complete.");
+    return;
+  }
+
   requestInProgress = true;
   (<HTMLButtonElement>submitButton).disabled = true;
 
@@ -171,7 +175,7 @@ async function handleClick() {
   chatHistory.push({ role: "user", content: inp });
 
   let curMessage = "";
-  const completion = await engine.chat.completions.create({
+  const completion = await popupEngine.chat.completions.create({
     stream: true,
     messages: chatHistory,
   });
@@ -182,8 +186,8 @@ async function handleClick() {
     }
     updateAnswer(curMessage);
   }
-  const response = await engine.getMessage();
-  chatHistory.push({ role: "assistant", content: await engine.getMessage() });
+  const response = await popupEngine.getMessage();
+  chatHistory.push({ role: "assistant", content: await popupEngine.getMessage() });
   console.log("response", response);
 
   requestInProgress = false;
@@ -194,6 +198,12 @@ submitButton.addEventListener("click", handleClick);
 // listen for changes in modelSelector
 async function handleSelectChange() {
   if (isLoadingParams) {
+    return;
+  }
+
+  const popupEngine = (window as any).popupEngine;
+  if (!popupEngine) {
+    console.error('Popup engine not available');
     return;
   }
 
@@ -213,11 +223,11 @@ async function handleSelectChange() {
   (<HTMLButtonElement>submitButton).disabled = true;
 
   if (requestInProgress) {
-    engine.interruptGenerate();
+    popupEngine.interruptGenerate();
   }
-  engine.resetChat();
+  popupEngine.resetChat();
   chatHistory = [];
-  await engine.unload();
+  await popupEngine.unload();
 
   selectedModel = modelSelector.value;
 
@@ -241,38 +251,140 @@ async function handleSelectChange() {
     }
   };
 
-  engine.setInitProgressCallback(initProgressCallback);
+  popupEngine.setInitProgressCallback(initProgressCallback);
 
   requestInProgress = true;
   modelName.innerText = "Reloading with new model...";
-  await engine.reload(selectedModel);
+  await popupEngine.reload(selectedModel);
   requestInProgress = false;
   modelName.innerText = "Now chatting with " + modelDisplayName;
 }
 modelSelector.addEventListener("change", handleSelectChange);
 
-// Listen for messages from the background script
-chrome.runtime.onMessage.addListener(({ answer, error }) => {
-  if (answer) {
-    updateAnswer(answer);
+// Listen for messages from the background script and LinkedIn content script
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.answer) {
+    updateAnswer(request.answer);
+  }
+  
+  if (request.action === 'generateLinkedInReply') {
+    // Forward to background service worker which handles AI generation
+    chrome.runtime.sendMessage({
+      action: 'generateLinkedInReply',
+      postContent: request.postContent
+    }, (response) => {
+      sendResponse(response);
+    });
+    return true; // Keep channel open for async response
   }
 });
+
+// Check and display background engine status on popup load
+document.addEventListener('DOMContentLoaded', async () => {
+  // Check if background engine is available
+  chrome.runtime.sendMessage({ action: 'checkEngineStatus' }, (response) => {
+    if (response?.engineReady) {
+      // Background AI is ready, we can use it for both chat and LinkedIn
+      console.log('Background AI engine is ready');
+    } else if (response?.initializing) {
+      console.log('Background AI engine is initializing...');
+      setLabel("model-name", "AI is initializing in background...");
+    } else {
+      console.log('Background AI engine not ready, will use popup AI for chat');
+    }
+  });
+  
+  // Initialize popup AI engine for chat functionality
+  await initializePopupEngine();
+  
+  // Add keyboard shortcuts for closing popup
+  document.addEventListener('keydown', (e) => {
+    // Close on Escape key
+    if (e.key === 'Escape') {
+      console.log('Closing popup with Escape key...');
+      window.close();
+    }
+    
+    // Close on Ctrl/Cmd + W
+    if ((e.ctrlKey || e.metaKey) && e.key === 'w') {
+      e.preventDefault();
+      console.log('Closing popup with Ctrl/Cmd+W...');
+      window.close();
+    }
+  });
+});
+
+// Initialize the popup AI engine for chat functionality
+async function initializePopupEngine() {
+  try {
+    modelName.innerText = "Loading chat model...";
+    const engine: MLCEngineInterface = await CreateMLCEngine(selectedModel, {
+      initProgressCallback: initProgressCallback,
+    });
+    modelName.innerText = "Now chatting with " + modelDisplayName;
+    
+    // Store engine globally for chat functionality
+    (window as any).popupEngine = engine;
+    
+  } catch (error) {
+    console.error('Failed to initialize popup engine:', error);
+    modelName.innerText = "Failed to load chat model";
+  }
+}
 
 function updateAnswer(answer: string) {
   // Show answer
   document.getElementById("answerWrapper")!.style.display = "block";
   const answerWithBreaks = answer.replace(/\n/g, "<br>");
   document.getElementById("answer")!.innerHTML = answerWithBreaks;
+  
   // Add event listener to copy button
-  document.getElementById("copyAnswer")!.addEventListener("click", () => {
+  const copyButton = document.getElementById("copyAnswer")!;
+  // Remove any existing event listeners
+  copyButton.replaceWith(copyButton.cloneNode(true));
+  const newCopyButton = document.getElementById("copyAnswer")!;
+  
+  newCopyButton.addEventListener("click", () => {
     // Get the answer text
     const answerText = answer;
     // Copy the answer text to the clipboard
     navigator.clipboard
       .writeText(answerText)
-      .then(() => console.log("Answer text copied to clipboard"))
+      .then(() => {
+        console.log("Answer text copied to clipboard");
+        // Show visual feedback
+        const icon = newCopyButton.querySelector("i")!;
+        icon.className = "fa-solid fa-check fa-lg";
+        setTimeout(() => {
+          icon.className = "fa-solid fa-copy fa-lg";
+        }, 2000);
+      })
       .catch((err) => console.error("Could not copy text: ", err));
   });
+
+  // Add close button if it doesn't exist
+  let closeButton = document.getElementById("closePopup");
+  if (!closeButton) {
+    closeButton = document.createElement("button");
+    closeButton.id = "closePopup";
+    closeButton.className = "btn closeButton";
+    closeButton.title = "Close popup";
+    closeButton.innerHTML = '<i class="fa-solid fa-times fa-lg"></i>';
+    
+    // Add the close button to the copyRow
+    const copyRow = document.querySelector(".copyRow")!;
+    copyRow.appendChild(closeButton);
+  }
+  
+  // Add event listener to close button
+  closeButton.replaceWith(closeButton.cloneNode(true));
+  const newCloseButton = document.getElementById("closePopup")!;
+  
+  newCloseButton.addEventListener("click", () => {
+    console.log("Closing popup...");
+    window.close();
+  });
+
   const options: Intl.DateTimeFormatOptions = {
     month: "short",
     day: "2-digit",

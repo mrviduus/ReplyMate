@@ -1,0 +1,443 @@
+/* ReplyMate LinkedIn Integration Styles */
+
+/* Generate Reply Button - Inherit LinkedIn's native styles */
+.replymate-generate-btn {
+  /* Override any conflicting LinkedIn styles while maintaining appearance */
+  background: #0a66c2 !important;
+  color: white !important;
+  border-radius: 20px !important;
+  font-weight: 600 !important;
+  gap: 6px !important;
+  padding: 6px 12px !important;
+  min-height: 32px !important;
+  border: 1px solid #0a66c2 !important;
+}
+
+.replymate-generate-btn:hover {
+  background: #004182 !important;
+  border-color: #004182 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(10, 102, 194, 0.3);
+}
+
+.replymate-generate-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 4px rgba(10, 102, 194, 0.3);
+}
+
+.replymate-generate-btn:focus {
+  outline: 2px solid #0a66c2;
+  outline-offset: 2px;
+}
+
+.replymate-generate-btn:disabled {
+  opacity: 0.7 !important;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Button States */
+.replymate-generate-btn.loading {
+  background: #666 !important;
+  border-color: #666 !important;
+  cursor: wait;
+}
+
+.replymate-generate-btn.success {
+  background: #057642 !important;
+  border-color: #057642 !important;
+}
+
+.replymate-generate-btn.error {
+  background: #cc1016 !important;
+  border-color: #cc1016 !important;
+}
+
+/* Icon Styles */
+.replymate-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.replymate-icon.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Button Text */
+.replymate-button-text {
+  white-space: nowrap;
+}
+
+/* Reply Panel */
+.replymate-panel {
+  margin: 16px 0;
+  padding: 16px;
+  background: #f8f9fa;
+  border: 1px solid #d0d5da;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  opacity: 0;
+  transform: translateY(-10px);
+  transition: all 0.3s ease;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.replymate-panel-show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.replymate-panel-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Reply Text Display */
+.replymate-reply-text {
+  padding: 12px 16px;
+  background: white;
+  border: 1px solid #e1e5e9;
+  border-radius: 6px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #181818;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  min-height: 60px;
+  position: relative;
+}
+
+.replymate-reply-text:focus {
+  outline: 2px solid #0a66c2;
+  outline-offset: 1px;
+}
+
+/* Panel Action Buttons */
+.replymate-panel-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.replymate-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: white;
+  color: #666;
+  border: 1px solid #d0d5da;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: 36px;
+  font-family: inherit;
+}
+
+.replymate-btn:hover {
+  background: #f3f6f8;
+  border-color: #0a66c2;
+  color: #0a66c2;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.replymate-btn:active {
+  transform: translateY(0);
+}
+
+.replymate-btn:focus {
+  outline: 2px solid #0a66c2;
+  outline-offset: 2px;
+}
+
+.replymate-btn svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+/* Specific button styles */
+.replymate-regenerate:hover {
+  color: #8b5cf6;
+  border-color: #8b5cf6;
+}
+
+.replymate-copy:hover {
+  color: #059669;
+  border-color: #059669;
+}
+
+.replymate-insert {
+  background: #0a66c2;
+  color: white;
+  border-color: #0a66c2;
+}
+
+.replymate-insert:hover {
+  background: #004182;
+  border-color: #004182;
+  color: white;
+}
+
+/* Toast Notifications */
+.replymate-toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  padding: 12px 24px;
+  background: #057642;
+  color: white;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  z-index: 999999;
+  transition: transform 0.3s ease;
+  max-width: 400px;
+  text-align: center;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.replymate-toast-show {
+  transform: translateX(-50%) translateY(0);
+}
+
+.replymate-toast-error {
+  background: #dc2626;
+}
+
+/* Loading states */
+.replymate-loading {
+  color: #666;
+  font-style: italic;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .replymate-generate-btn {
+    padding: 4px 8px !important;
+    font-size: 12px !important;
+    gap: 4px !important;
+  }
+  
+  .replymate-button-text {
+    display: none;
+  }
+  
+  .replymate-panel {
+    margin: 12px 0;
+    padding: 12px;
+  }
+  
+  .replymate-panel-actions {
+    justify-content: center;
+  }
+  
+  .replymate-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+  
+  .replymate-toast {
+    max-width: 90vw;
+    margin: 0 5vw;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .replymate-generate-btn {
+    border-width: 2px;
+  }
+  
+  .replymate-panel {
+    border-width: 2px;
+  }
+  
+  .replymate-btn {
+    border-width: 2px;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .replymate-generate-btn,
+  .replymate-btn,
+  .replymate-panel,
+  .replymate-toast {
+    transition: none;
+  }
+  
+  .replymate-icon.spinning {
+    animation: none;
+  }
+  
+  .replymate-generate-btn:hover,
+  .replymate-btn:hover {
+    transform: none;
+  }
+}
+
+/* Dark mode support (if LinkedIn implements it) */
+@media (prefers-color-scheme: dark) {
+  .replymate-panel {
+    background: #1e1e1e;
+    border-color: #404040;
+    color: #e1e1e1;
+  }
+  
+  .replymate-reply-text {
+    background: #2a2a2a;
+    border-color: #404040;
+    color: #e1e1e1;
+  }
+  
+  .replymate-btn {
+    background: #2a2a2a;
+    border-color: #404040;
+    color: #e1e1e1;
+  }
+  
+  .replymate-btn:hover {
+    background: #3a3a3a;
+  }
+}
+
+/* Accessibility improvements */
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+/* Focus visible for better keyboard navigation */
+.replymate-generate-btn:focus-visible,
+.replymate-btn:focus-visible {
+  outline: 2px solid #0a66c2;
+  outline-offset: 2px;
+}
+
+/* Ensure proper contrast ratios */
+.replymate-generate-btn {
+  /* Ensures 4.5:1 contrast ratio */
+  color: white;
+}
+
+.replymate-btn {
+  /* Ensures proper contrast */
+  color: #374151;
+}
+
+/* Animation for better UX */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.replymate-panel-show {
+  animation: fadeInUp 0.3s ease-out;
+}
+
+/* Prevent layout shift and ensure proper integration */
+.replymate-generate-btn {
+  /* Fits naturally with LinkedIn's action buttons */
+  box-sizing: border-box;
+}
+
+/* Override LinkedIn styles that might conflict */
+.replymate-generate-btn * {
+  pointer-events: none;
+}
+
+.replymate-btn * {
+  pointer-events: none;
+}
+
+/* Ensure proper stacking */
+.replymate-panel {
+  position: relative;
+  z-index: 10;
+}
+
+.replymate-toast {
+  z-index: 999999;
+}
+
+/* Close button specific styling */
+.replymate-close {
+  background: #fff !important;
+  color: #666 !important;
+  border-color: #dc2626 !important;
+}
+
+.replymate-close:hover {
+  background: #fee !important;
+  color: #dc2626 !important;
+  border-color: #dc2626 !important;
+}
+
+/* Panel hiding animation */
+.replymate-panel-hiding {
+  opacity: 0;
+  transform: translateY(-10px);
+  transition: all 0.3s ease;
+}
+
+/* Adjust button layout for better spacing */
+.replymate-panel-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+  .replymate-panel-actions {
+    justify-content: center;
+    gap: 6px;
+  }
+  
+  .replymate-btn {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+  
+  /* Stack buttons on very small screens */
+  @media (max-width: 480px) {
+    .replymate-panel-actions {
+      flex-direction: column;
+      width: 100%;
+    }
+    
+    .replymate-btn {
+      width: 100%;
+      justify-content: center;
+    }
+  }
+}
