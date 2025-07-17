@@ -90,10 +90,8 @@ for (let i = 0; i < prebuiltAppConfig.model_list.length; ++i) {
 }
 
 modelName.innerText = "Loading initial model...";
-const engine: MLCEngineInterface = await CreateMLCEngine(selectedModel, {
-  initProgressCallback: initProgressCallback,
-});
-modelName.innerText = "Now chatting with " + modelDisplayName;
+// Remove direct engine initialization - will be done in DOMContentLoaded
+let engine: MLCEngineInterface;
 
 let chatHistory: ChatCompletionMessageParam[] = [];
 
@@ -144,6 +142,12 @@ queryInput.addEventListener("keyup", (event) => {
 
 // Listen for clicks on submit button
 async function handleClick() {
+  const popupEngine = (window as any).popupEngine;
+  if (!popupEngine) {
+    updateAnswer("Chat AI not ready. Please wait for initialization to complete.");
+    return;
+  }
+
   requestInProgress = true;
   (<HTMLButtonElement>submitButton).disabled = true;
 
@@ -171,7 +175,7 @@ async function handleClick() {
   chatHistory.push({ role: "user", content: inp });
 
   let curMessage = "";
-  const completion = await engine.chat.completions.create({
+  const completion = await popupEngine.chat.completions.create({
     stream: true,
     messages: chatHistory,
   });
@@ -182,8 +186,8 @@ async function handleClick() {
     }
     updateAnswer(curMessage);
   }
-  const response = await engine.getMessage();
-  chatHistory.push({ role: "assistant", content: await engine.getMessage() });
+  const response = await popupEngine.getMessage();
+  chatHistory.push({ role: "assistant", content: await popupEngine.getMessage() });
   console.log("response", response);
 
   requestInProgress = false;
@@ -194,6 +198,12 @@ submitButton.addEventListener("click", handleClick);
 // listen for changes in modelSelector
 async function handleSelectChange() {
   if (isLoadingParams) {
+    return;
+  }
+
+  const popupEngine = (window as any).popupEngine;
+  if (!popupEngine) {
+    console.error('Popup engine not available');
     return;
   }
 
@@ -213,11 +223,11 @@ async function handleSelectChange() {
   (<HTMLButtonElement>submitButton).disabled = true;
 
   if (requestInProgress) {
-    engine.interruptGenerate();
+    popupEngine.interruptGenerate();
   }
-  engine.resetChat();
+  popupEngine.resetChat();
   chatHistory = [];
-  await engine.unload();
+  await popupEngine.unload();
 
   selectedModel = modelSelector.value;
 
@@ -241,11 +251,11 @@ async function handleSelectChange() {
     }
   };
 
-  engine.setInitProgressCallback(initProgressCallback);
+  popupEngine.setInitProgressCallback(initProgressCallback);
 
   requestInProgress = true;
   modelName.innerText = "Reloading with new model...";
-  await engine.reload(selectedModel);
+  await popupEngine.reload(selectedModel);
   requestInProgress = false;
   modelName.innerText = "Now chatting with " + modelDisplayName;
 }
@@ -258,88 +268,51 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
   
   if (request.action === 'generateLinkedInReply') {
-    // Handle LinkedIn reply generation
-    handleLinkedInReplyGeneration(request.postContent, sendResponse);
+    // Forward to background service worker which handles AI generation
+    chrome.runtime.sendMessage({
+      action: 'generateLinkedInReply',
+      postContent: request.postContent
+    }, (response) => {
+      sendResponse(response);
+    });
     return true; // Keep channel open for async response
   }
 });
 
-// Handle LinkedIn reply generation with AI
-async function handleLinkedInReplyGeneration(postContent: string, sendResponse: (response: any) => void) {
+// Check and display background engine status on popup load
+document.addEventListener('DOMContentLoaded', async () => {
+  // Check if background engine is available
+  chrome.runtime.sendMessage({ action: 'checkEngineStatus' }, (response) => {
+    if (response?.engineReady) {
+      // Background AI is ready, we can use it for both chat and LinkedIn
+      console.log('Background AI engine is ready');
+    } else if (response?.initializing) {
+      console.log('Background AI engine is initializing...');
+      setLabel("model-name", "AI is initializing in background...");
+    } else {
+      console.log('Background AI engine not ready, will use popup AI for chat');
+    }
+  });
+  
+  // Initialize popup AI engine for chat functionality
+  await initializePopupEngine();
+});
+
+// Initialize the popup AI engine for chat functionality
+async function initializePopupEngine() {
   try {
-    if (!engine) {
-      // Try to initialize the engine if not already done
-      if (!isLoadingParams) {
-        sendResponse({ 
-          error: 'AI model not loaded. Please open the extension popup to initialize the model first.',
-          fallbackReply: "Thank you for sharing this insightful post! I'd love to hear more about your thoughts on this topic."
-        });
-        return;
-      } else {
-        sendResponse({ 
-          error: 'AI model is still loading. Please wait and try again.',
-          fallbackReply: "Thank you for sharing this insightful post!"
-        });
-        return;
-      }
-    }
-
-    console.log('Generating LinkedIn reply for:', postContent.substring(0, 100) + '...');
-
-    // Create LinkedIn-specific prompt
-    const prompt = `You are a professional LinkedIn user. Generate a thoughtful, engaging reply to this LinkedIn post.
-
-Guidelines:
-- Keep it professional and conversational
-- 2-3 sentences maximum 
-- Add value to the conversation
-- Use proper business language
-- Avoid excessive hashtags or emojis
-- Be authentic and helpful
-
-Post content: "${postContent}"
-
-Generate a professional reply:`;
-
-    const messages: ChatCompletionMessageParam[] = [
-      {
-        role: "system",
-        content: "You are a helpful LinkedIn networking assistant that creates professional, engaging replies to posts. Always maintain a professional tone while being conversational and adding value to the discussion."
-      },
-      {
-        role: "user", 
-        content: prompt
-      }
-    ];
-
-    let reply = "";
-    const completion = await engine.chat.completions.create({
-      stream: true,
-      messages: messages,
-      max_tokens: 150,
-      temperature: 0.7,
-      top_p: 0.9
+    modelName.innerText = "Loading chat model...";
+    const engine: MLCEngineInterface = await CreateMLCEngine(selectedModel, {
+      initProgressCallback: initProgressCallback,
     });
-
-    for await (const chunk of completion) {
-      const delta = chunk.choices[0]?.delta?.content;
-      if (delta) {
-        reply += delta;
-      }
-    }
-
-    const cleanedReply = reply.trim();
-    console.log('Generated LinkedIn reply:', cleanedReply);
+    modelName.innerText = "Now chatting with " + modelDisplayName;
     
-    sendResponse({ reply: cleanedReply });
+    // Store engine globally for chat functionality
+    (window as any).popupEngine = engine;
     
   } catch (error) {
-    console.error('Error generating LinkedIn reply:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-    sendResponse({ 
-      error: 'Failed to generate reply: ' + errorMessage,
-      fallbackReply: "Thank you for sharing this insightful post! I'd love to hear more about your thoughts on this topic."
-    });
+    console.error('Failed to initialize popup engine:', error);
+    modelName.innerText = "Failed to load chat model";
   }
 }
 

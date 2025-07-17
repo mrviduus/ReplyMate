@@ -218,7 +218,16 @@ class LinkedInReplyMate {
     // Show loading state
     this.updateButtonState(postId, 'loading');
 
-    // Try to send message to popup first, fallback to background
+    // First check engine status
+    chrome.runtime.sendMessage({
+      action: 'checkEngineStatus'
+    }, (statusResponse) => {
+      if (statusResponse?.initializing) {
+        this.showToast('AI model is loading. This may take a few minutes on first use...', 'error');
+      }
+    });
+
+    // Send generation request
     chrome.runtime.sendMessage({
       action: 'generateLinkedInReply',
       postId: postId,
@@ -235,26 +244,14 @@ class LinkedInReplyMate {
         this.showReplyPanel(post, response.reply);
         this.updateButtonState(postId, 'success');
         
-        // Show note if it's a fallback reply
-        if (response.note) {
-          this.showToast(response.note, 'error');
+        // Show initialization warning if applicable
+        if (response.error && response.isInitializing) {
+          this.showToast('AI is still loading. This reply is a suggestion. Try again in a moment for AI-powered responses.', 'error');
         }
-      } else if (response?.fallbackReply) {
-        this.showReplyPanel(post, response.fallbackReply);
-        this.updateButtonState(postId, 'success');
-        this.showToast('Using fallback reply. For AI responses, please open the ReplyMate popup.', 'error');
       } else if (response?.error) {
         console.error('Reply generation error:', response.error);
         this.updateButtonState(postId, 'error');
         this.showToast(response.error, 'error');
-        
-        // Show fallback reply if available
-        if (response.fallbackReply) {
-          setTimeout(() => {
-            this.showReplyPanel(post, response.fallbackReply);
-            this.updateButtonState(postId, 'success');
-          }, 1000);
-        }
       } else {
         this.updateButtonState(postId, 'error');
         this.showToast('No response received', 'error');
