@@ -1,26 +1,24 @@
 # ReplyMate - AI-Powered LinkedIn Assistant
 
-![ReplyMate Extension]
-
 An intelligent Chrome extension that enhances your LinkedIn experience with AI-powered reply generation directly within LinkedIn posts, while maintaining full chat functionality for manual testing.
 
-## ✨ Features
+## Features
 
 ### LinkedIn Integration
-- 🤖 **One-Click Reply Generation**: Generate professional replies directly on LinkedIn posts
-- 🔄 **Regenerate Options**: Don't like the first suggestion? Generate alternatives
-- 📋 **Copy & Insert**: Easy copy-to-clipboard or direct insertion into comment boxes
-- 🎨 **Native Styling**: Seamlessly blends with LinkedIn's interface
-- ♿ **Accessibility**: Full keyboard navigation and screen reader support
-- ⚡ **Real-time Processing**: Works with infinite scroll and dynamic content
+- **One-Click Reply Generation**: Generate professional replies directly on LinkedIn posts
+- **Regenerate Options**: Don't like the first suggestion? Generate alternatives
+- **Copy & Insert**: Easy copy-to-clipboard or direct insertion into comment boxes
+- **Native Styling**: Seamlessly blends with LinkedIn's interface
+- **Accessibility**: Full keyboard navigation and screen reader support
+- **Real-time Processing**: Works with infinite scroll and dynamic content
 
 ### General Features
-- 💬 **Browser Chat**: Manual chat interface for testing and general AI interactions
-- 🧠 **Local AI Models**: Powered by WebLLM (Qwen2/Llama models)
-- 🔒 **Privacy-First**: All processing happens locally, no data sent to external servers
-- 🚀 **Performance Optimized**: Minimal impact on page loading and scrolling
+- **Browser Chat**: Manual chat interface for testing and general AI interactions
+- **Local AI Models**: Powered by WebLLM (Qwen2/Llama models)
+- **Privacy-First**: All processing happens locally, no data sent to external servers
+- **Performance Optimized**: Minimal impact on page loading and scrolling
 
-## 🚀 Quick Installation
+## Quick Installation
 
 Run the automated installation script:
 
@@ -29,13 +27,13 @@ Run the automated installation script:
 ```
 
 This script will:
-- ✅ Check prerequisites (Node.js, npm, Chrome)
-- 📦 Install dependencies
-- 🔨 Build the extension
-- 🔍 Validate all files
-- 🚀 Optionally open Chrome extensions page
+- Check prerequisites (Node.js, npm, Chrome)
+- Install dependencies
+- Build the extension
+- Validate all files
+- Optionally open Chrome extensions page
 
-## 📋 Manual Installation
+## Manual Installation
 
 If you prefer manual setup:
 
@@ -50,7 +48,7 @@ Then load the extension in Chrome:
 3. Click "Load unpacked" and select the `dist/` directory
 4. Pin the ReplyMate extension to your toolbar
 
-## 🎯 Usage
+## Usage
 
 ### LinkedIn Reply Generation
 1. **Navigate to LinkedIn**: Open [linkedin.com](https://linkedin.com) in your browser
@@ -68,7 +66,7 @@ Then load the extension in Chrome:
 3. **Start Chatting**: Type your questions or requests
 4. **Get Responses**: Receive AI-powered responses for any topic
 
-## ⚠️ Important Compliance Notice
+## Important Compliance Notice
 
 **LinkedIn Terms of Service Warning**: This extension provides tools for generating reply suggestions. Users are responsible for:
 - Reviewing all generated content before posting
@@ -78,7 +76,7 @@ Then load the extension in Chrome:
 
 The extension displays this warning in the browser console when used on LinkedIn.
 
-## 🛠️ Technical Architecture
+## Technical Architecture
 
 ### Content Scripts
 - **General Content Script** (`content.js`): Handles page content extraction for manual chat
@@ -94,7 +92,7 @@ The extension displays this warning in the browser console when used on LinkedIn
 - **Accessibility**: WCAG compliant with proper contrast ratios and keyboard navigation
 - **Native Integration**: Matches LinkedIn's visual design language
 
-## 🧪 Development
+## Development
 
 ### Running Tests
 ```bash
@@ -117,7 +115,7 @@ npm run test:ci       # CI-friendly test run
 - Accessibility compliance testing
 - Error handling and edge cases
 
-## 📂 Project Structure
+## Project Structure
 
 ```
 src/
@@ -135,18 +133,18 @@ tests/
 └── ...                          # Other test files
 ```
 
-## 🎯 Acceptance Criteria Compliance
+## Acceptance Criteria Compliance
 
-✅ **F-1**: Recognizes LinkedIn pages automatically  
-✅ **F-2**: Detects posts dynamically with infinite scroll  
-✅ **F-3**: Injects "Generate Reply" buttons near comment controls  
-✅ **F-4**: Sends post content to local AI model  
-✅ **F-5**: Displays generated comments in compact panels  
-✅ **F-6**: Provides Regenerate, Copy, and Insert controls  
-✅ **F-7**: Maintains functionality with dynamic content loading  
-✅ **F-8**: Blends with LinkedIn's native styling  
-✅ **F-9**: Shows ToS compliance warning in console  
-✅ **F-10**: Complies with Chrome Manifest V3  
+- **F-1**: Recognizes LinkedIn pages automatically  
+- **F-2**: Detects posts dynamically with infinite scroll  
+- **F-3**: Injects "Generate Reply" buttons near comment controls  
+- **F-4**: Sends post content to local AI model  
+- **F-5**: Displays generated comments in compact panels  
+- **F-6**: Provides Regenerate, Copy, and Insert controls  
+- **F-7**: Maintains functionality with dynamic content loading  
+- **F-8**: Blends with LinkedIn's native styling  
+- **F-9**: Shows ToS compliance warning in console  
+- **F-10**: Complies with Chrome Manifest V3  
 
 ### Performance Metrics
 - **Button Visibility**: >95% of visible posts receive buttons
@@ -154,7 +152,7 @@ tests/
 - **Action Reliability**: All buttons (Regenerate, Copy, Insert) function without errors
 - **Visual Integration**: No significant visual regressions in Lighthouse audits
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -178,7 +176,7 @@ tests/
 - Different post types may have different comment box structures
 - Use "Copy" as alternative and paste manually
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch
@@ -187,11 +185,7 @@ tests/
 5. Ensure all tests pass
 6. Submit a pull request
 
-## 📄 License
-
-This project is licensed under the ISC License.
-
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - [WebLLM](https://github.com/mlc-ai/web-llm) for local AI inference
 - LinkedIn for providing a platform for professional networking
