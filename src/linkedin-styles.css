@@ -1,33 +1,21 @@
 /* ReplyMate LinkedIn Integration Styles */
 
-/* Button Container */
-.replymate-button-container {
-  display: inline-block;
-  margin-left: 8px;
-}
-
-/* Generate Reply Button */
+/* Generate Reply Button - Inherit LinkedIn's native styles */
 .replymate-generate-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: #0a66c2;
-  color: white;
-  border: 1px solid #0a66c2;
-  border-radius: 20px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  position: relative;
-  min-height: 32px;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  /* Override any conflicting LinkedIn styles while maintaining appearance */
+  background: #0a66c2 !important;
+  color: white !important;
+  border-radius: 20px !important;
+  font-weight: 600 !important;
+  gap: 6px !important;
+  padding: 6px 12px !important;
+  min-height: 32px !important;
+  border: 1px solid #0a66c2 !important;
 }
 
 .replymate-generate-btn:hover {
-  background: #004182;
-  border-color: #004182;
+  background: #004182 !important;
+  border-color: #004182 !important;
   transform: translateY(-1px);
   box-shadow: 0 2px 8px rgba(10, 102, 194, 0.3);
 }
@@ -43,26 +31,26 @@
 }
 
 .replymate-generate-btn:disabled {
-  opacity: 0.7;
+  opacity: 0.7 !important;
   cursor: not-allowed;
   transform: none;
 }
 
 /* Button States */
 .replymate-generate-btn.loading {
-  background: #666;
-  border-color: #666;
+  background: #666 !important;
+  border-color: #666 !important;
   cursor: wait;
 }
 
 .replymate-generate-btn.success {
-  background: #057642;
-  border-color: #057642;
+  background: #057642 !important;
+  border-color: #057642 !important;
 }
 
 .replymate-generate-btn.error {
-  background: #cc1016;
-  border-color: #cc1016;
+  background: #cc1016 !important;
+  border-color: #cc1016 !important;
 }
 
 /* Icon Styles */
@@ -239,9 +227,9 @@
 /* Responsive Design */
 @media (max-width: 768px) {
   .replymate-generate-btn {
-    padding: 4px 8px;
-    font-size: 12px;
-    gap: 4px;
+    padding: 4px 8px !important;
+    font-size: 12px !important;
+    gap: 4px !important;
   }
   
   .replymate-button-text {
@@ -374,11 +362,10 @@
   animation: fadeInUp 0.3s ease-out;
 }
 
-/* Prevent layout shift */
-.replymate-button-container {
-  min-width: 120px;
-  display: inline-flex;
-  justify-content: center;
+/* Prevent layout shift and ensure proper integration */
+.replymate-generate-btn {
+  /* Fits naturally with LinkedIn's action buttons */
+  box-sizing: border-box;
 }
 
 /* Override LinkedIn styles that might conflict */

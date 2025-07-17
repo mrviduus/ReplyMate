@@ -169,29 +169,28 @@ class LinkedInReplyMate {
     // Create reply button
     const replyButton = this.createReplyButton(post.id);
     
-    // Insert the button in the action bar
-    const commentButton = actionContainer.querySelector('button[aria-label*="Comment"], button[aria-label*="comment"]');
-    if (commentButton && commentButton.parentElement) {
-      commentButton.parentElement.insertBefore(replyButton, commentButton.nextSibling);
-    } else {
-      actionContainer.appendChild(replyButton);
-    }
+    // Insert the button as the last action button in the action bar
+    actionContainer.appendChild(replyButton);
 
     post.hasReplyButton = true;
   }
 
   private createReplyButton(postId: string): HTMLElement {
-    const buttonContainer = document.createElement('div');
-    buttonContainer.className = 'replymate-button-container';
+    // Create the action button container following LinkedIn's structure
+    const actionButtonContainer = document.createElement('div');
+    actionButtonContainer.className = 'feed-shared-social-action-bar__action-button feed-shared-social-action-bar--new-padding';
     
     const button = document.createElement('button');
-    button.className = 'replymate-generate-btn';
+    button.className = 'replymate-generate-btn artdeco-button artdeco-button--muted artdeco-button--3 artdeco-button--tertiary social-actions-button flex-wrap';
     button.setAttribute('aria-label', 'Generate AI reply with ReplyMate');
+    button.setAttribute('type', 'button');
     button.innerHTML = `
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" class="replymate-icon">
-        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+      <svg role="none" aria-hidden="true" class="artdeco-button__icon replymate-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.94-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
       </svg>
-      <span class="replymate-button-text">Generate Reply</span>
+      <span class="artdeco-button__text">
+        <span class="artdeco-button__text social-action-button__text replymate-button-text">Generate Reply</span>
+      </span>
     `;
     
     button.addEventListener('click', (e) => {
@@ -208,8 +207,8 @@ class LinkedInReplyMate {
       }
     });
 
-    buttonContainer.appendChild(button);
-    return buttonContainer;
+    actionButtonContainer.appendChild(button);
+    return actionButtonContainer;
   }
 
   private handleGenerateClick(postId: string): void {
