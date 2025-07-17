@@ -251,12 +251,97 @@ async function handleSelectChange() {
 }
 modelSelector.addEventListener("change", handleSelectChange);
 
-// Listen for messages from the background script
-chrome.runtime.onMessage.addListener(({ answer, error }) => {
-  if (answer) {
-    updateAnswer(answer);
+// Listen for messages from the background script and LinkedIn content script
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.answer) {
+    updateAnswer(request.answer);
+  }
+  
+  if (request.action === 'generateLinkedInReply') {
+    // Handle LinkedIn reply generation
+    handleLinkedInReplyGeneration(request.postContent, sendResponse);
+    return true; // Keep channel open for async response
   }
 });
+
+// Handle LinkedIn reply generation with AI
+async function handleLinkedInReplyGeneration(postContent: string, sendResponse: (response: any) => void) {
+  try {
+    if (!engine) {
+      // Try to initialize the engine if not already done
+      if (!isLoadingParams) {
+        sendResponse({ 
+          error: 'AI model not loaded. Please open the extension popup to initialize the model first.',
+          fallbackReply: "Thank you for sharing this insightful post! I'd love to hear more about your thoughts on this topic."
+        });
+        return;
+      } else {
+        sendResponse({ 
+          error: 'AI model is still loading. Please wait and try again.',
+          fallbackReply: "Thank you for sharing this insightful post!"
+        });
+        return;
+      }
+    }
+
+    console.log('Generating LinkedIn reply for:', postContent.substring(0, 100) + '...');
+
+    // Create LinkedIn-specific prompt
+    const prompt = `You are a professional LinkedIn user. Generate a thoughtful, engaging reply to this LinkedIn post.
+
+Guidelines:
+- Keep it professional and conversational
+- 2-3 sentences maximum 
+- Add value to the conversation
+- Use proper business language
+- Avoid excessive hashtags or emojis
+- Be authentic and helpful
+
+Post content: "${postContent}"
+
+Generate a professional reply:`;
+
+    const messages: ChatCompletionMessageParam[] = [
+      {
+        role: "system",
+        content: "You are a helpful LinkedIn networking assistant that creates professional, engaging replies to posts. Always maintain a professional tone while being conversational and adding value to the discussion."
+      },
+      {
+        role: "user", 
+        content: prompt
+      }
+    ];
+
+    let reply = "";
+    const completion = await engine.chat.completions.create({
+      stream: true,
+      messages: messages,
+      max_tokens: 150,
+      temperature: 0.7,
+      top_p: 0.9
+    });
+
+    for await (const chunk of completion) {
+      const delta = chunk.choices[0]?.delta?.content;
+      if (delta) {
+        reply += delta;
+      }
+    }
+
+    const cleanedReply = reply.trim();
+    console.log('Generated LinkedIn reply:', cleanedReply);
+    
+    sendResponse({ reply: cleanedReply });
+    
+  } catch (error) {
+    console.error('Error generating LinkedIn reply:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    sendResponse({ 
+      error: 'Failed to generate reply: ' + errorMessage,
+      fallbackReply: "Thank you for sharing this insightful post! I'd love to hear more about your thoughts on this topic."
+    });
+  }
+}
 
 function updateAnswer(answer: string) {
   // Show answer
