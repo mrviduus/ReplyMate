@@ -296,6 +296,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Initialize popup AI engine for chat functionality
   await initializePopupEngine();
+  
+  // Add keyboard shortcuts for closing popup
+  document.addEventListener('keydown', (e) => {
+    // Close on Escape key
+    if (e.key === 'Escape') {
+      console.log('Closing popup with Escape key...');
+      window.close();
+    }
+    
+    // Close on Ctrl/Cmd + W
+    if ((e.ctrlKey || e.metaKey) && e.key === 'w') {
+      e.preventDefault();
+      console.log('Closing popup with Ctrl/Cmd+W...');
+      window.close();
+    }
+  });
 });
 
 // Initialize the popup AI engine for chat functionality
@@ -321,16 +337,54 @@ function updateAnswer(answer: string) {
   document.getElementById("answerWrapper")!.style.display = "block";
   const answerWithBreaks = answer.replace(/\n/g, "<br>");
   document.getElementById("answer")!.innerHTML = answerWithBreaks;
+  
   // Add event listener to copy button
-  document.getElementById("copyAnswer")!.addEventListener("click", () => {
+  const copyButton = document.getElementById("copyAnswer")!;
+  // Remove any existing event listeners
+  copyButton.replaceWith(copyButton.cloneNode(true));
+  const newCopyButton = document.getElementById("copyAnswer")!;
+  
+  newCopyButton.addEventListener("click", () => {
     // Get the answer text
     const answerText = answer;
     // Copy the answer text to the clipboard
     navigator.clipboard
       .writeText(answerText)
-      .then(() => console.log("Answer text copied to clipboard"))
+      .then(() => {
+        console.log("Answer text copied to clipboard");
+        // Show visual feedback
+        const icon = newCopyButton.querySelector("i")!;
+        icon.className = "fa-solid fa-check fa-lg";
+        setTimeout(() => {
+          icon.className = "fa-solid fa-copy fa-lg";
+        }, 2000);
+      })
       .catch((err) => console.error("Could not copy text: ", err));
   });
+
+  // Add close button if it doesn't exist
+  let closeButton = document.getElementById("closePopup");
+  if (!closeButton) {
+    closeButton = document.createElement("button");
+    closeButton.id = "closePopup";
+    closeButton.className = "btn closeButton";
+    closeButton.title = "Close popup";
+    closeButton.innerHTML = '<i class="fa-solid fa-times fa-lg"></i>';
+    
+    // Add the close button to the copyRow
+    const copyRow = document.querySelector(".copyRow")!;
+    copyRow.appendChild(closeButton);
+  }
+  
+  // Add event listener to close button
+  closeButton.replaceWith(closeButton.cloneNode(true));
+  const newCloseButton = document.getElementById("closePopup")!;
+  
+  newCloseButton.addEventListener("click", () => {
+    console.log("Closing popup...");
+    window.close();
+  });
+
   const options: Intl.DateTimeFormatOptions = {
     month: "short",
     day: "2-digit",

@@ -386,3 +386,58 @@
 .replymate-toast {
   z-index: 999999;
 }
+
+/* Close button specific styling */
+.replymate-close {
+  background: #fff !important;
+  color: #666 !important;
+  border-color: #dc2626 !important;
+}
+
+.replymate-close:hover {
+  background: #fee !important;
+  color: #dc2626 !important;
+  border-color: #dc2626 !important;
+}
+
+/* Panel hiding animation */
+.replymate-panel-hiding {
+  opacity: 0;
+  transform: translateY(-10px);
+  transition: all 0.3s ease;
+}
+
+/* Adjust button layout for better spacing */
+.replymate-panel-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+  .replymate-panel-actions {
+    justify-content: center;
+    gap: 6px;
+  }
+  
+  .replymate-btn {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+  
+  /* Stack buttons on very small screens */
+  @media (max-width: 480px) {
+    .replymate-panel-actions {
+      flex-direction: column;
+      width: 100%;
+    }
+    
+    .replymate-btn {
+      width: 100%;
+      justify-content: center;
+    }
+  }
+}

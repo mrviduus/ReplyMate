@@ -329,6 +329,21 @@ p {
   background-color: transparent;
 }
 
+.closeButton {
+  color: #415a77;
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  margin-left: 0.5rem;
+  transition: color 0.2s ease;
+}
+
+.closeButton:hover {
+  color: #c33;
+  background-color: transparent;
+}
+
 .removeButton {
   color: #415a77;
   background-color: transparent;

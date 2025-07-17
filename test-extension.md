@@ -1,4 +1,10 @@
-# Testing ReplyMate Extension
+# Testing ReplyMate Ext6. **Expected behavior:**
+   - Button should show loading state
+   - If AI is still initializing, you'll see a toast message: "AI model is loading..."
+   - Once ready, an AI-generated professional reply should appear in a panel
+   - The reply should be relevant to the post content
+   - **Reply panel will have 4 action buttons**: [Regenerate] [Copy] [Insert] [Close]
+   - The Close button (×) allows you to dismiss the reply paneln
 
 ## Installation Instructions
 
@@ -51,6 +57,10 @@
 3. Wait for model loading to complete
 4. Type a message and press Enter
 5. Should receive AI-generated response
+6. **New: Close functionality**
+   - Click the "×" (close) button next to the copy button
+   - Or press `Escape` key to close popup
+   - Or press `Ctrl+W` (Windows) / `Cmd+W` (Mac) to close popup
 
 ## Key Features Implemented
 
@@ -60,6 +70,10 @@
 ✅ **Status Feedback**: Loading states and error messages for better UX
 ✅ **Fallback Handling**: Graceful degradation when AI is initializing
 ✅ **Chat Interface**: Full conversational AI in extension popup
+✅ **Close Popup Functionality**: Multiple ways to close popup after getting responses
+  - Close button (×) next to copy button
+  - Escape key shortcut
+  - Ctrl/Cmd+W keyboard shortcut
 
 ## Architecture Overview
 
