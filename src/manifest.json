@@ -33,7 +33,7 @@
       "run_at": "document_idle"
     }
   ],
-  "permissions": ["storage", "tabs", "webNavigation", "activeTab", "windows", "alarms"],
+  "permissions": ["storage", "tabs", "activeTab", "windows", "alarms"],
   "host_permissions": ["https://*.linkedin.com/*"],
   "web_accessible_resources": [
     {
