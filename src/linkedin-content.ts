@@ -52,6 +52,13 @@ class LinkedInReplyMate {
       }
       return true;
     });
+
+    // Listen for content requests from popup (for chat functionality)
+    chrome.runtime.onConnect.addListener((port) => {
+      port.onMessage.addListener((_msg) => {
+        port.postMessage({ contents: document.body.innerText });
+      });
+    });
   }
 
   private observePosts(): void {
