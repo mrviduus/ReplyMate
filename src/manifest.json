@@ -33,7 +33,7 @@
       "run_at": "document_idle"
     }
   ],
-  "permissions": ["storage", "tabs", "webNavigation", "activeTab", "scripting", "windows", "alarms"],
+  "permissions": ["storage", "tabs", "webNavigation", "activeTab", "windows", "alarms"],
   "host_permissions": ["<all_urls>"],
   "web_accessible_resources": [
     {
