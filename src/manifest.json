@@ -34,7 +34,7 @@
     }
   ],
   "permissions": ["storage", "tabs", "webNavigation", "activeTab", "windows", "alarms"],
-  "host_permissions": ["<all_urls>"],
+  "host_permissions": ["https://*.linkedin.com/*"],
   "web_accessible_resources": [
     {
       "resources": ["linkedin-styles.css"],
