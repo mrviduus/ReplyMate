@@ -2,7 +2,14 @@
 
 An intelligent Chrome extension that enhances your LinkedIn experience with AI-powered reply generation directly within LinkedIn posts, while maintaining full chat functionality for manual testing.
 
-## Features
+## 📚 Documentation
+
+- **[USER GUIDE](USER_GUIDE.md)** - Complete guide for installing and using ReplyMate
+- **[DEVELOPMENT GUIDE](DEVELOPMENT.md)** - Developer documentation for building and contributing
+- **[CI/CD PIPELINE](CICD.md)** - Continuous integration and deployment setup
+- **[REQUIREMENTS](docs/LinkedIn_ReplyMate_Requirements.md)** - Technical requirements and specifications
+
+## ✨ Features
 
 ### LinkedIn Integration
 - **One-Click Reply Generation**: Generate professional replies directly on LinkedIn posts
@@ -18,10 +25,33 @@ An intelligent Chrome extension that enhances your LinkedIn experience with AI-p
 - **Privacy-First**: All processing happens locally, no data sent to external servers
 - **Performance Optimized**: Minimal impact on page loading and scrolling
 
-## Quick Installation
+## 🚀 Quick Start
 
+### For Users
+1. **Install from Chrome Web Store** (when available)
+2. **Or download from [Releases](https://github.com/mrviduus/ReplyMate/releases)**
+3. **Follow the [User Guide](USER_GUIDE.md)** for complete setup instructions
+
+### For Developers
+```bash
+# Clone and setup
+git clone https://github.com/mrviduus/ReplyMate.git
+cd ReplyMate
+npm install
+
+# Development workflow
+npm run dev          # Start development mode
+npm run test         # Run tests
+npm run build        # Build for production
+npm run package      # Create distribution packages
+```
+
+See the **[Development Guide](DEVELOPMENT.md)** for detailed instructions.
+
+## 📦 Installation Options
+
+### Option 1: Automated Installation
 Run the automated installation script:
-
 ```bash
 ./install.sh
 ```
@@ -33,10 +63,7 @@ This script will:
 - Validate all files
 - Optionally open Chrome extensions page
 
-## Manual Installation
-
-If you prefer manual setup:
-
+### Option 2: Manual Installation
 ```bash
 npm install
 npm run build
@@ -48,7 +75,7 @@ Then load the extension in Chrome:
 3. Click "Load unpacked" and select the `dist/` directory
 4. Pin the ReplyMate extension to your toolbar
 
-## Usage
+## 🎯 Usage
 
 ### LinkedIn Reply Generation
 1. **Navigate to LinkedIn**: Open [linkedin.com](https://linkedin.com) in your browser
@@ -66,7 +93,38 @@ Then load the extension in Chrome:
 3. **Start Chatting**: Type your questions or requests
 4. **Get Responses**: Receive AI-powered responses for any topic
 
-## Important Compliance Notice
+## 🔄 CI/CD & Release Pipeline
+
+ReplyMate includes a comprehensive CI/CD pipeline with automated testing, building, and releasing:
+
+### Automated Workflows
+- **✅ Continuous Integration**: Tests and builds on every push
+- **✅ Code Quality**: ESLint, Prettier, and TypeScript checking
+- **✅ Security Scanning**: Dependency audits and CodeQL analysis
+- **✅ Automated Releases**: GitHub releases with ZIP packages
+
+### Version Management
+```bash
+# Bump version and create release
+./scripts/version-bump.sh --type patch
+git push origin main --tags
+
+# This automatically triggers:
+# 1. GitHub Actions build and test
+# 2. Release creation with assets
+# 3. ZIP package generation for Chrome Web Store
+```
+
+### Build Scripts
+```bash
+./scripts/build.sh      # Comprehensive build with validation
+./scripts/package.sh    # Create distribution packages
+./scripts/version-bump.sh # Version management
+```
+
+See **[CI/CD Documentation](CICD.md)** for complete pipeline details.
+
+## 🛡️ Important Compliance Notice
 
 **LinkedIn Terms of Service Warning**: This extension provides tools for generating reply suggestions. Users are responsible for:
 - Reviewing all generated content before posting
