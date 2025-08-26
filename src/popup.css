@@ -185,21 +185,33 @@ body {
 }
 
 .btn-primary:hover {
-  background: #084c94;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(10, 102, 194, 0.3);
+  background: #0056b3;
+}
+
+.btn-primary:disabled {
+  background: #6c757d;
+  border-color: #6c757d;
+  cursor: not-allowed;
+  opacity: 0.65;
 }
 
 .btn-secondary {
   background: #f8f9fa;
   color: #6c757d;
-  border: 2px solid #e9ecef;
-  flex: 1;
+  border: 1px solid #dee2e6;
 }
 
 .btn-secondary:hover {
   background: #e9ecef;
   color: #495057;
+}
+
+.btn-secondary:disabled {
+  background: #f8f9fa;
+  border-color: #dee2e6;
+  color: #6c757d;
+  cursor: not-allowed;
+  opacity: 0.65;
 }
 
 .status-message {
@@ -246,6 +258,35 @@ body {
   gap: 8px;
   font-size: 14px;
   color: #495057;
+}
+
+/* Settings loading state */
+.settings-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 20px;
+  gap: 16px;
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #007bff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.settings-loading p {
+  margin: 0;
+  color: #6c757d;
+  font-size: 14px;
 }
 
 .text-success {

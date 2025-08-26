@@ -681,3 +681,52 @@ if (window.location.hostname.includes('linkedin.com')) {
     linkedInReplyMate.destroy();
   });
 }
+
+// Debug function to test if custom prompts are being used
+function testCustomPrompts() {
+  console.log('🧪 Testing custom prompts integration...');
+  
+  // Create a test post content
+  const testPostContent = "This is a test post to verify custom prompts are working correctly.";
+  
+  chrome.runtime.sendMessage({
+    action: 'generateLinkedInReply',
+    postContent: testPostContent
+  }, (response) => {
+    console.log('📬 Test response received:', response);
+    if (response?.reply) {
+      console.log('✅ Reply generated:', response.reply);
+      alert(`Test successful! Generated reply:\n\n${response.reply}\n\nCheck the console for details about which prompt was used.`);
+    } else {
+      console.error('❌ Test failed:', response);
+      alert('Test failed! Check console for details.');
+    }
+  });
+}
+
+// Function to verify prompts are stored correctly
+function verifyStoredPrompts() {
+  console.log('🔍 Verifying stored prompts...');
+  
+  chrome.runtime.sendMessage({ action: 'verifyPrompts' }, (response) => {
+    console.log('📊 Verification Response:', response);
+    
+    if (response?.hasCustomPrompts) {
+      console.log('✅ Custom prompts ARE stored');
+      console.log('🎯 Using custom standard:', response.isUsingCustomStandard);
+      console.log('🎯 Using custom comments:', response.isUsingCustomComments);
+      alert(`Verification Results:\n✅ Custom prompts found!\n🎯 Standard: ${response.isUsingCustomStandard ? 'CUSTOM' : 'DEFAULT'}\n🎯 Comments: ${response.isUsingCustomComments ? 'CUSTOM' : 'DEFAULT'}`);
+    } else {
+      console.warn('⚠️ No custom prompts found - using defaults');
+      alert('⚠️ No custom prompts found.\nGo to ReplyMate settings and save some custom prompts first!');
+    }
+  });
+}
+
+// Make the test functions available globally for debugging
+(window as any).testReplyMatePrompts = testCustomPrompts;
+(window as any).verifyReplyMatePrompts = verifyStoredPrompts;
+
+console.log('💡 ReplyMate Debug Functions Available:');
+console.log('   - window.testReplyMatePrompts() - Test prompt generation');
+console.log('   - window.verifyReplyMatePrompts() - Verify stored prompts');
