@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Chatbot</title>
+    <title>ReplyMate</title>
     <link rel="stylesheet" href="popup.css" />
     <link
       rel="stylesheet"
@@ -14,41 +14,115 @@
       <header class="popup-hdr">
         <img id="logo" src="icons/icon-32.png" width="32" height="32">
         <h1 class="brand">ReplyMate</h1>
-        <!-- <p class="tagline">AI-Powered LinkedIn Replies</p> -->
       </header>
       
-      <select id="model-selection" class="select"></select>
-      <div id="loadingBox">
-        <p id="init-label">Initializing model...</p>
-        <div id="loadingContainer"></div>
-      </div>
-      <p id="model-name"></p>
-      <div class="input-container form-group">
-        <input
-          type="search"
-          id="query-input"
-          placeholder="What's on your mind?"
-        />
-        <button id="submit-button" class="btn">
+      <!-- Tab Navigation -->
+      <div class="tab-navigation">
+        <button class="tab-btn active" data-tab="chat">
           <i class="fa fa-comments"></i>
+          <span>Chat</span>
+        </button>
+        <button class="tab-btn" data-tab="settings">
+          <i class="fa fa-cog"></i>
+          <span>Settings</span>
         </button>
       </div>
-
-      <div class="stage">
-        <div id="loading-indicator" class="dot-flashing"></div>
-      </div>
-
-      <div id="answerWrapper">
-        <div id="answer"></div>
-        <div class="copyRow">
-          <span id="timestamp"></span>
-          <button
-            id="copyAnswer"
-            class="btn copyButton"
-            title="Copy the Answer to the Clipboard"
-          >
-            <i class="fa-solid fa-copy fa-lg"></i>
+      
+      <!-- Chat Tab Content -->
+      <div id="chat-tab" class="tab-content active">
+        <select id="model-selection" class="select"></select>
+        <div id="loadingBox">
+          <p id="init-label">Initializing model...</p>
+          <div id="loadingContainer"></div>
+        </div>
+        <p id="model-name"></p>
+        
+        <div class="input-container form-group">
+          <input
+            type="search"
+            id="query-input"
+            placeholder="What's on your mind?"
+          />
+          <button id="submit-button" class="btn">
+            <i class="fa fa-comments"></i>
           </button>
+        </div>
+
+        <div class="stage">
+          <div id="loading-indicator" class="dot-flashing"></div>
+        </div>
+
+        <div id="answerWrapper">
+          <div id="answer"></div>
+          <div class="copyRow">
+            <span id="timestamp"></span>
+            <button
+              id="copyAnswer"
+              class="btn copyButton"
+              title="Copy the Answer to the Clipboard"
+            >
+              <i class="fa-solid fa-copy fa-lg"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Settings Tab Content -->
+      <div id="settings-tab" class="tab-content">
+        <div class="settings-section">
+          <h3>AI Prompt Customization</h3>
+          <p class="settings-description">Customize how the AI generates LinkedIn replies</p>
+          
+          <div class="prompt-group">
+            <label for="standardPrompt" class="prompt-label">
+              <i class="fa fa-comment"></i>
+              Standard Reply Prompt
+            </label>
+            <textarea 
+              id="standardPrompt" 
+              class="prompt-textarea"
+              rows="6"
+              placeholder="Loading...">
+            </textarea>
+            <small class="prompt-hint">Used for regular post replies</small>
+          </div>
+          
+          <div class="prompt-group">
+            <label for="withCommentsPrompt" class="prompt-label">
+              <i class="fa fa-chart-line"></i>
+              Smart Reply Prompt
+            </label>
+            <textarea 
+              id="withCommentsPrompt" 
+              class="prompt-textarea"
+              rows="6"
+              placeholder="Loading...">
+            </textarea>
+            <small class="prompt-hint">Used when analyzing top comments for engagement</small>
+          </div>
+          
+          <div class="settings-actions">
+            <button id="savePrompts" class="btn btn-primary">
+              <i class="fa fa-save"></i>
+              Save Changes
+            </button>
+            <button id="resetPrompts" class="btn btn-secondary">
+              <i class="fa fa-undo"></i>
+              Reset to Defaults
+            </button>
+          </div>
+          
+          <div id="settingsStatus" class="status-message"></div>
+          
+          <div class="settings-info">
+            <h4>Reply Guidelines</h4>
+            <ul class="guidelines-list">
+              <li><i class="fa fa-check text-success"></i> Replies limited to 1-2 sentences maximum</li>
+              <li><i class="fa fa-check text-success"></i> AI analyzes successful comments for patterns</li>
+              <li><i class="fa fa-check text-success"></i> Responses tailored to post context and tone</li>
+              <li><i class="fa fa-check text-success"></i> Avoids generic phrases like "Great post!"</li>
+            </ul>
+          </div>
         </div>
       </div>
     </div>

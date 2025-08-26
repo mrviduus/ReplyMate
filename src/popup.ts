@@ -281,6 +281,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 // Check and display background engine status on popup load
 document.addEventListener('DOMContentLoaded', async () => {
+  // Initialize tab functionality
+  initializeTabs();
+  
+  // Initialize settings functionality
+  await initializeSettings();
+
   // Check if background engine is available
   chrome.runtime.sendMessage({ action: 'checkEngineStatus' }, (response) => {
     if (response?.engineReady) {
@@ -313,6 +319,129 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 });
+
+// Initialize tab switching functionality
+function initializeTabs() {
+  const tabButtons = document.querySelectorAll('.tab-btn');
+  const tabContents = document.querySelectorAll('.tab-content');
+  
+  tabButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      const targetTab = button.getAttribute('data-tab');
+      
+      // Remove active class from all tabs and contents
+      tabButtons.forEach(btn => btn.classList.remove('active'));
+      tabContents.forEach(content => content.classList.remove('active'));
+      
+      // Add active class to clicked tab and corresponding content
+      button.classList.add('active');
+      document.getElementById(`${targetTab}-tab`)?.classList.add('active');
+    });
+  });
+}
+
+// Initialize settings functionality
+async function initializeSettings() {
+  const standardPromptTextarea = document.getElementById('standardPrompt') as HTMLTextAreaElement;
+  const withCommentsPromptTextarea = document.getElementById('withCommentsPrompt') as HTMLTextAreaElement;
+  const saveButton = document.getElementById('savePrompts');
+  const resetButton = document.getElementById('resetPrompts');
+  const statusMessage = document.getElementById('settingsStatus');
+
+  // Load current prompts
+  await loadPrompts();
+
+  // Save prompts functionality
+  saveButton?.addEventListener('click', async () => {
+    const prompts = {
+      standard: standardPromptTextarea.value,
+      withComments: withCommentsPromptTextarea.value
+    };
+    
+    try {
+      await new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({ 
+          action: 'savePrompts', 
+          prompts: prompts 
+        }, (response) => {
+          if (chrome.runtime.lastError) {
+            reject(chrome.runtime.lastError);
+          } else if (response?.success) {
+            resolve(response);
+          } else {
+            reject(new Error('Failed to save'));
+          }
+        });
+      });
+      
+      showStatus('Settings saved successfully!', 'success');
+    } catch (error) {
+      console.error('Failed to save prompts:', error);
+      showStatus('Failed to save settings', 'error');
+    }
+  });
+
+  // Reset prompts functionality
+  resetButton?.addEventListener('click', async () => {
+    if (confirm('Are you sure you want to reset to default prompts?')) {
+      try {
+        await new Promise((resolve, reject) => {
+          chrome.runtime.sendMessage({ action: 'resetPrompts' }, (response) => {
+            if (chrome.runtime.lastError) {
+              reject(chrome.runtime.lastError);
+            } else if (response?.success) {
+              resolve(response);
+            } else {
+              reject(new Error('Failed to reset'));
+            }
+          });
+        });
+        
+        await loadPrompts();
+        showStatus('Reset to default prompts', 'success');
+      } catch (error) {
+        console.error('Failed to reset prompts:', error);
+        showStatus('Failed to reset settings', 'error');
+      }
+    }
+  });
+
+  // Load prompts function
+  async function loadPrompts() {
+    try {
+      const response = await new Promise<any>((resolve, reject) => {
+        chrome.runtime.sendMessage({ action: 'getPrompts' }, (response) => {
+          if (chrome.runtime.lastError) {
+            reject(chrome.runtime.lastError);
+          } else {
+            resolve(response);
+          }
+        });
+      });
+
+      const prompts = response.prompts || {};
+      const defaults = response.defaults || {};
+      
+      standardPromptTextarea.value = prompts.standard || defaults.standard || '';
+      withCommentsPromptTextarea.value = prompts.withComments || defaults.withComments || '';
+    } catch (error) {
+      console.error('Failed to load prompts:', error);
+      showStatus('Failed to load settings', 'error');
+    }
+  }
+
+  // Show status message function
+  function showStatus(message: string, type: 'success' | 'error') {
+    if (statusMessage) {
+      statusMessage.textContent = message;
+      statusMessage.className = `status-message ${type}`;
+      
+      setTimeout(() => {
+        statusMessage.className = 'status-message';
+      }, 3000);
+    }
+  }
+}
 
 // Initialize the popup AI engine for chat functionality
 async function initializePopupEngine() {
