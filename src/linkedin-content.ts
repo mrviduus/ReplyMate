@@ -3,11 +3,19 @@
 
 console.log('ReplyMate LinkedIn content script loaded');
 
+interface LinkedInComment {
+  id: string;
+  text: string;
+  likeCount: number;
+  element: HTMLElement;
+}
+
 interface LinkedInPost {
   id: string;
   element: HTMLElement;
   textContent: string;
   hasReplyButton: boolean;
+  comments?: LinkedInComment[];
 }
 
 class LinkedInReplyMate {
@@ -152,6 +160,97 @@ class LinkedInReplyMate {
     return "";
   }
 
+  private extractComments(postElement: HTMLElement): LinkedInComment[] {
+    const comments: LinkedInComment[] = [];
+    
+    // LinkedIn comment selectors
+    const commentSelectors = [
+      '.comments-comment-item',
+      '[data-test-id="comments-comment-item"]',
+      '.comment-item',
+      'article[class*="comments-comment-item"]'
+    ];
+    
+    for (const selector of commentSelectors) {
+      const commentElements = postElement.querySelectorAll(selector);
+      
+      commentElements.forEach((commentEl: Element) => {
+        const comment = this.extractCommentData(commentEl as HTMLElement);
+        if (comment) {
+          comments.push(comment);
+        }
+      });
+    }
+    
+    // Sort by like count (highest first)
+    return comments.sort((a, b) => b.likeCount - a.likeCount);
+  }
+
+  private extractCommentData(commentElement: HTMLElement): LinkedInComment | null {
+    // Extract comment text
+    const textSelectors = [
+      '.comments-comment-item__main-content',
+      '.comments-comment-texteditor',
+      '[data-test-id="comment-text"]',
+      '.comments-comment-item-content-body'
+    ];
+    
+    let commentText = '';
+    for (const selector of textSelectors) {
+      const textEl = commentElement.querySelector(selector);
+      if (textEl?.textContent) {
+        commentText = textEl.textContent.trim();
+        break;
+      }
+    }
+    
+    if (!commentText) return null;
+    
+    // Extract like count
+    const likeCount = this.extractLikeCount(commentElement);
+    
+    return {
+      id: `comment-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      text: commentText,
+      likeCount: likeCount,
+      element: commentElement
+    };
+  }
+
+  private extractLikeCount(commentElement: HTMLElement): number {
+    // LinkedIn like count selectors
+    const likeSelectors = [
+      '.social-counts-reactions__count',
+      '[data-test-id="social-actions__reaction-count"]',
+      '.reactions-react-button span[aria-hidden="true"]',
+      '.comments-comment-social-bar__reactions-count'
+    ];
+    
+    for (const selector of likeSelectors) {
+      const likeEl = commentElement.querySelector(selector);
+      if (likeEl?.textContent) {
+        // Parse the number (might be "12", "1.2K", etc.)
+        return this.parseLikeCount(likeEl.textContent);
+      }
+    }
+    
+    return 0;
+  }
+
+  private parseLikeCount(text: string): number {
+    text = text.trim().toLowerCase();
+    
+    // Handle K (thousands) and M (millions)
+    if (text.includes('k')) {
+      return Math.round(parseFloat(text.replace('k', '')) * 1000);
+    }
+    if (text.includes('m')) {
+      return Math.round(parseFloat(text.replace('m', '')) * 1000000);
+    }
+    
+    return parseInt(text, 10) || 0;
+  }
+
   private injectReplyButton(post: LinkedInPost): void {
     // Find the comment/action area
     const actionSelectors = [
@@ -225,6 +324,22 @@ class LinkedInReplyMate {
     // Show loading state
     this.updateButtonState(postId, 'loading');
 
+    // Extract comments for smart analysis
+    const comments = this.extractComments(post.element);
+    post.comments = comments;
+
+    // Get top performing comments (with likes > 0)
+    const topComments = comments
+      .filter(c => c.likeCount > 0)
+      .slice(0, 5) // Get top 5 comments
+      .map(c => ({
+        text: c.text.substring(0, 200), // Limit text length
+        likeCount: c.likeCount
+      }));
+
+    // Check if we should use smart comment analysis
+    const useSmartAnalysis = topComments.length >= 2; // Need at least 2 liked comments
+
     // First check engine status
     chrome.runtime.sendMessage({
       action: 'checkEngineStatus'
@@ -234,36 +349,66 @@ class LinkedInReplyMate {
       }
     });
 
-    // Send generation request
-    chrome.runtime.sendMessage({
-      action: 'generateLinkedInReply',
-      postId: postId,
-      postContent: post.textContent
-    }, (response) => {
-      if (chrome.runtime.lastError) {
-        console.error('Chrome runtime error:', chrome.runtime.lastError);
-        this.updateButtonState(postId, 'error');
-        this.showToast('Failed to connect to AI service', 'error');
-        return;
-      }
+    if (useSmartAnalysis) {
+      // Show user that we're using smart analysis
+      this.showToast('Analyzing top-performing comments for better reply...', 'success');
+      
+      // Send request with comment analysis
+      chrome.runtime.sendMessage({
+        action: 'generateLinkedInReplyWithComments',
+        postId: postId,
+        postContent: post.textContent,
+        topComments: topComments
+      }, (response) => {
+        this.handleReplyResponse(postId, response);
+      });
+    } else {
+      // Fall back to regular generation
+      chrome.runtime.sendMessage({
+        action: 'generateLinkedInReply',
+        postId: postId,
+        postContent: post.textContent
+      }, (response) => {
+        this.handleReplyResponse(postId, response);
+      });
+    }
+  }
 
-      if (response?.reply) {
-        this.showReplyPanel(post, response.reply);
-        this.updateButtonState(postId, 'success');
-        
-        // Show initialization warning if applicable
-        if (response.error && response.isInitializing) {
-          this.showToast('AI is still loading. This reply is a suggestion. Try again in a moment for AI-powered responses.', 'error');
-        }
-      } else if (response?.error) {
-        console.error('Reply generation error:', response.error);
-        this.updateButtonState(postId, 'error');
-        this.showToast(response.error, 'error');
-      } else {
-        this.updateButtonState(postId, 'error');
-        this.showToast('No response received', 'error');
+  private handleReplyResponse(postId: string, response: any): void {
+    const post = this.posts.get(postId);
+    if (!post) return;
+
+    if (chrome.runtime.lastError) {
+      console.error('Chrome runtime error:', chrome.runtime.lastError);
+      this.updateButtonState(postId, 'error');
+      this.showToast('Failed to connect to AI service', 'error');
+      return;
+    }
+
+    if (response?.reply) {
+      this.showReplyPanel(post, response.reply);
+      this.updateButtonState(postId, 'success');
+      
+      // Show special message if based on comment analysis
+      if (response.basedOnComments) {
+        this.showToast(
+          `Smart reply generated based on ${response.commentCount} top comments!`, 
+          'success'
+        );
       }
-    });
+      
+      // Show initialization warning if applicable
+      if (response.error && response.isInitializing) {
+        this.showToast('AI is still loading. This reply is a suggestion. Try again in a moment for AI-powered responses.', 'error');
+      }
+    } else if (response?.error) {
+      console.error('Reply generation error:', response.error);
+      this.updateButtonState(postId, 'error');
+      this.showToast(response.error, 'error');
+    } else {
+      this.updateButtonState(postId, 'error');
+      this.showToast('No response received', 'error');
+    }
   }
 
   private updateButtonState(postId: string, state: 'loading' | 'success' | 'error' | 'default'): void {
@@ -319,6 +464,10 @@ class LinkedInReplyMate {
     const existingPanel = post.element.querySelector('.replymate-panel');
     existingPanel?.remove();
 
+    // Check if reply was based on comment analysis
+    const hasCommentAnalysis = post.comments && post.comments.filter(c => c.likeCount > 0).length > 0;
+    const commentCount = post.comments ? post.comments.filter(c => c.likeCount > 0).length : 0;
+
     // Create new panel
     const panel = document.createElement('div');
     panel.className = 'replymate-panel';
@@ -326,6 +475,14 @@ class LinkedInReplyMate {
     panel.setAttribute('aria-label', 'Generated reply panel');
     panel.innerHTML = `
       <div class="replymate-panel-content">
+        ${hasCommentAnalysis ? `
+          <div class="replymate-smart-indicator">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm2-7h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11z"/>
+            </svg>
+            Smart reply based on ${commentCount} top comments
+          </div>
+        ` : ''}
         <div class="replymate-reply-text" role="textbox" aria-readonly="true" tabindex="0">${this.escapeHtml(generatedReply)}</div>
         <div class="replymate-panel-actions">
           <button class="replymate-btn replymate-regenerate" data-action="regenerate" aria-label="Regenerate reply">

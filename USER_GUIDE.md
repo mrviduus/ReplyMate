@@ -9,6 +9,7 @@ ReplyMate is a Chrome extension that generates intelligent replies for LinkedIn 
 
 ### Key Features
 - 🤖 **AI-Powered Replies**: Generate contextual responses to LinkedIn posts
+- 🧠 **Smart Comment Analysis**: Analyzes high-performing comments to create better replies
 - 🔒 **Privacy First**: All processing happens locally in your browser
 - ⚡ **One-Click Generation**: Simple "Generate Reply" button on each post
 - 🎨 **LinkedIn Integration**: Seamlessly blends with LinkedIn's design
@@ -43,10 +44,27 @@ ReplyMate is a Chrome extension that generates intelligent replies for LinkedIn 
    - The AI will analyze the post content and generate a relevant reply
 
 3. **Use Generated Replies**
+   - **Smart Indicator**: Look for the blue indicator showing when replies are based on comment analysis
    - **Regenerate**: Don't like the response? Click "Regenerate" for a new one
    - **Copy**: Copy the reply to your clipboard
    - **Insert**: Automatically insert the reply into LinkedIn's comment box
    - **Edit**: Modify the generated text before posting
+
+### 🧠 Smart Comment Analysis
+
+ReplyMate now includes intelligent comment analysis that makes your replies more engaging:
+
+- **Automatic Detection**: When a post has 2+ comments with likes, ReplyMate automatically analyzes them
+- **Pattern Learning**: Studies the style and tone of high-performing comments
+- **Better Engagement**: Generates replies more likely to receive likes and responses
+- **Transparent Process**: Shows when analysis is being used with a clear indicator
+
+**How it works:**
+1. ReplyMate scans existing comments on the post
+2. Identifies comments with the most likes
+3. Analyzes their writing style, tone, and content patterns
+4. Generates a new reply that follows successful patterns while adding unique value
+5. Shows a smart indicator: "Smart reply based on X top comments"
 
 ### In the Extension Popup
 

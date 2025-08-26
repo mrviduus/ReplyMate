@@ -99,6 +99,42 @@
   gap: 12px;
 }
 
+/* Smart Reply Indicator */
+.replymate-smart-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: linear-gradient(135deg, #0a66c2 0%, #004182 100%);
+  color: white;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  margin-bottom: 8px;
+  animation: shimmer 2s ease-in-out;
+}
+
+@keyframes shimmer {
+  0% { opacity: 0.8; }
+  50% { opacity: 1; }
+  100% { opacity: 0.8; }
+}
+
+.replymate-smart-indicator svg {
+  flex-shrink: 0;
+}
+
+/* Highlight for comment analysis mode */
+.replymate-generate-btn.smart-mode {
+  background: linear-gradient(135deg, #0a66c2 0%, #004182 100%) !important;
+  color: white !important;
+  border-color: #004182 !important;
+}
+
+.replymate-generate-btn.smart-mode:hover {
+  background: linear-gradient(135deg, #004182 0%, #00305c 100%) !important;
+}
+
 /* Reply Text Display */
 .replymate-reply-text {
   padding: 12px 16px;

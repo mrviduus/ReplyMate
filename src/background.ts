@@ -70,6 +70,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true; // Keep channel open for async response
   }
   
+  if (request.action === 'generateLinkedInReplyWithComments') {
+    handleLinkedInReplyWithComments(
+      request.postContent, 
+      request.topComments,
+      sendResponse
+    );
+    return true; // Keep channel open for async response
+  }
+  
   if (request.action === 'checkEngineStatus') {
     sendResponse({ 
       initialized: engineInitialized,
@@ -88,6 +97,81 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return false;
   }
 });
+
+async function handleLinkedInReplyWithComments(
+  postContent: string, 
+  topComments: Array<{text: string, likeCount: number}>,
+  sendResponse: (response: any) => void
+) {
+  try {
+    const engine = await ensureEngine();
+    
+    console.log('Generating LinkedIn reply based on top comments...');
+    
+    // Create enhanced prompt with comment analysis
+    const systemPrompt = `You are a professional LinkedIn user who writes thoughtful, engaging replies.
+You have analyzed the most successful comments on this post (those with the most likes).
+Your task is to create a new comment that:
+- Incorporates the style and tone of highly-liked comments
+- Adds unique value while following successful patterns
+- Maintains professional LinkedIn etiquette
+- Is concise (2-3 sentences)
+- Shows genuine interest and insight`;
+
+    // Format top comments for context
+    const topCommentsContext = topComments.length > 0 
+      ? `\n\nTop performing comments (by likes):\n${
+          topComments.slice(0, 3).map((c, i) => 
+            `${i + 1}. (${c.likeCount} likes): "${c.text}"`
+          ).join('\n')
+        }`
+      : '';
+
+    const userPrompt = `Generate a professional LinkedIn reply to this post:
+
+"${postContent}"
+${topCommentsContext}
+
+Create a reply that would likely receive high engagement, similar to the successful comments above:`;
+
+    const messages: ChatCompletionMessageParam[] = [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt }
+    ];
+
+    let reply = "";
+    const completion = await engine.chat.completions.create({
+      stream: true,
+      messages: messages,
+      max_tokens: 150,
+      temperature: 0.7,
+      top_p: 0.9
+    });
+
+    for await (const chunk of completion) {
+      const delta = chunk.choices[0]?.delta?.content;
+      if (delta) {
+        reply += delta;
+      }
+    }
+
+    const cleanedReply = reply.trim();
+    console.log('Generated smart reply based on comment patterns:', cleanedReply);
+    
+    sendResponse({ 
+      reply: cleanedReply,
+      basedOnComments: true,
+      commentCount: topComments.length
+    });
+    
+  } catch (error) {
+    console.error('Error generating smart reply:', error);
+    sendResponse({ 
+      error: 'Failed to generate reply',
+      fallback: true 
+    });
+  }
+}
 
 async function handleLinkedInReply(postContent: string, sendResponse: (response: any) => void) {
   try {
