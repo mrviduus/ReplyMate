@@ -26,9 +26,16 @@ describe('LinkedIn Integration', () => {
     // Reset mocks
     jest.clearAllMocks();
     
-    // Mock LinkedIn page by deleting and redefining location
-    delete (window as any).location;
-    window.location = { hostname: 'www.linkedin.com' } as any;
+    // For testing, we'll mock the location check at the global level
+    // This avoids jsdom navigation issues while still testing functionality
+    (global as any).window = {
+      ...window,
+      location: {
+        hostname: 'www.linkedin.com',
+        href: 'https://www.linkedin.com/feed/',
+        origin: 'https://www.linkedin.com'
+      }
+    };
 
     // Setup LinkedIn-like DOM structure
     document.body.innerHTML = `
@@ -75,6 +82,10 @@ describe('LinkedIn Integration', () => {
       },
       writable: true
     });
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   afterEach(() => {
@@ -145,7 +156,7 @@ describe('LinkedIn Integration', () => {
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
           <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
         </svg>
-        <span>Reply</span>
+        <span>Generate Reply</span>
       `;
       actionContainer?.appendChild(generateButton);
       
