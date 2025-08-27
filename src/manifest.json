@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "ReplyMate",
   "version": "0.2.6",
-  "description": "AI-powered assistant for LinkedIn replies and browser chat.",
+  "description": "A helpful friend that lives in your browser and helps you write better replies on LinkedIn.",
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",
@@ -24,15 +24,15 @@
     {
       "matches": ["https://*.linkedin.com/*"],
       "js": ["linkedin-content.ts"],
-      "css": ["linkedin-styles.css"],
+      "css": ["styles.css"],
       "run_at": "document_idle"
     }
   ],
-  "permissions": ["storage", "tabs", "activeTab", "windows", "alarms"],
+  "permissions": ["storage", "activeTab"],
   "host_permissions": ["https://*.linkedin.com/*"],
   "web_accessible_resources": [
     {
-      "resources": ["linkedin-styles.css"],
+      "resources": ["styles.css"],
       "matches": ["https://*.linkedin.com/*"]
     }
   ]
