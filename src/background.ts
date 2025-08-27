@@ -2,48 +2,78 @@ import { CreateMLCEngine, MLCEngineInterface, ChatCompletionMessageParam, InitPr
 
 console.log('Background service worker loaded');
 
+// Model configuration for optimal selection
+const RECOMMENDED_MODELS = [
+  "Llama-3.2-3B-Instruct-q4f16_1-MLC",
+  "Llama-3.2-1B-Instruct-q4f16_1-MLC", 
+  "gemma-2-2b-it-q4f16_1-MLC",
+  "Phi-3.5-mini-instruct-q4f16_1-MLC",
+  "Qwen2.5-0.5B-Instruct-q4f16_1-MLC",
+];
+
+// Smart model selection for background service
+function getOptimalBackgroundModel(): string {
+  // For background service, prioritize reliability and moderate resource usage
+  // Start with fastest model for quick initialization, can upgrade later
+  return "Qwen2.5-0.5B-Instruct-q4f16_1-MLC"; // Fastest model for initial load
+}
+
 // Keep track of the AI engine
 let engine: MLCEngineInterface | null = null;
 let engineInitialized = false;
 let engineInitializing = false;
-let currentModel = "Qwen2-0.5B-Instruct-q4f16_1-MLC";
+let currentModel = getOptimalBackgroundModel(); // Use fast model initially
 
-// Default prompts that users can customize
+// Enhanced default prompts for better LinkedIn engagement
 const DEFAULT_PROMPTS = {
-  withComments: `You are a professional LinkedIn user who writes SHORT, engaging replies.
+  withComments: `You are a LinkedIn engagement expert who analyzes successful comments to write compelling replies.
 
 CRITICAL: Your response must be EXACTLY 1 sentence (maximum 25 words).
 
-ANALYSIS GUIDELINES:
-- Study the tone and style of highly-liked comments
-- Identify what makes them successful (humor, insights, questions, personal stories)
+SMART ANALYSIS:
+- Study the top-performing comments' tone, style, and engagement patterns
+- Identify what makes them successful: specific insights, relatable experiences, thought-provoking questions, or timely perspectives
+- Notice if they use data, personal anecdotes, industry insights, or call-to-action phrases
 
-YOUR REPLY MUST:
-- Be exactly 1 sentence (maximum 25 words)
-- Add unique value or ask a thoughtful question
-- Be authentic and conversational
-- Avoid clichés like "Great post!" or "Thanks for sharing!"
+YOUR REPLY STRATEGY:
+- Match the energy level of top comments while adding your unique perspective
+- If top comments ask questions → ask a related but different question
+- If top comments share experiences → reference a contrasting or complementary experience  
+- If top comments provide insights → add supporting data or a fresh angle
+- Use power words that drive engagement: "Actually...", "Interestingly...", "What if...", "I've found..."
 
-ENGAGEMENT TACTICS:
-- If top comments ask questions, your reply should too
-- If top comments share experiences, relate briefly
-- Use insights or data if relevant`,
+ENGAGEMENT MULTIPLIERS:
+- End with a question when possible (drives responses)
+- Reference specific details from the original post
+- Use "we" language to create community feeling
+- Be conversational but professional`,
 
-  standard: `You are a professional LinkedIn user who writes SHORT, engaging replies.
+  standard: `You are a LinkedIn communication expert who writes highly engaging, professional replies.
 
 CRITICAL: Your response must be EXACTLY 1 sentence (maximum 25 words).
 
-REPLY GUIDELINES:
-- Write exactly 1 sentence (maximum 25 words)
-- Be professional yet conversational and warm
-- Add genuine value through insights, questions, or experiences
-- Reference a specific point from the post
-- Include either a thoughtful question OR share a brief insight
+HIGH-IMPACT REPLY FORMULA:
+1. Hook: Start with something attention-grabbing ("Actually...", "This reminds me...", "What's interesting...")
+2. Value: Add genuine insight, experience, or perspective
+3. Connection: End with a question or call-to-action when appropriate
+
+PROVEN ENGAGEMENT PATTERNS:
+- Share a micro-insight: "I've seen this approach increase results by 40% in my experience."
+- Ask a strategic question: "What's been your biggest challenge implementing this strategy?"
+- Provide a contrasting view: "While I agree, I'd add that timing is equally crucial here."
+- Reference specific data/experience: "This aligns with the 70% increase we saw after..."
+
+PROFESSIONAL TONE GUIDE:
+- Confident but not arrogant
+- Helpful but not promotional  
+- Personal but not oversharing
+- Engaging but not casual
 
 AVOID:
-- "Great post!" or "Thanks for sharing!" as openers
-- Multiple sentences or long explanations
-- Generic agreement without substance`
+- Generic praise ("Great post!", "Thanks for sharing!")
+- Multiple sentences or explanations
+- Obvious statements everyone would agree with
+- Self-promotional content`
 };
 
 // Get user's custom prompt or use default
@@ -74,45 +104,62 @@ async function getUserPrompt(type: 'withComments' | 'standard'): Promise<string>
   }
 }
 
-// Initialize engine on first use
+// Initialize engine on first use with better error handling and timeouts
 async function ensureEngine(): Promise<MLCEngineInterface> {
-  if (engineInitialized && engine) {
+  if (engine && engineInitialized) {
     return engine;
   }
 
   if (engineInitializing) {
-    // Wait for ongoing initialization
-    while (engineInitializing) {
-      await new Promise(resolve => setTimeout(resolve, 100));
+    console.log('🔄 Engine already initializing, waiting...');
+    // Wait for initialization to complete with timeout
+    let attempts = 0;
+    while (engineInitializing && attempts < 60) { // 30 seconds max
+      await new Promise(resolve => setTimeout(resolve, 500));
+      attempts++;
     }
-    return engine!;
+    
+    if (engine && engineInitialized) {
+      return engine;
+    } else {
+      throw new Error('Engine initialization timed out or failed');
+    }
   }
 
   engineInitializing = true;
-  
-  try {
-    console.log('Initializing AI engine in background...');
-    
-    const initProgressCallback = (report: InitProgressReport) => {
-      console.log(`AI Engine: ${report.text} - ${Math.round(report.progress * 100)}%`);
-    };
+  console.log('🚀 Initializing background AI engine with model:', currentModel);
 
-    engine = await CreateMLCEngine(currentModel, {
-      initProgressCallback: initProgressCallback,
+  try {
+    // Add timeout for engine creation
+    const enginePromise = CreateMLCEngine(currentModel, {
+      initProgressCallback: (report: InitProgressReport) => {
+        console.log(`🔄 Loading ${currentModel}: ${report.text} (${Math.round(report.progress * 100)}%)`);
+      }
     });
-    
+
+    // Timeout after 2 minutes
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Engine initialization timeout')), 120000)
+    );
+
+    engine = await Promise.race([enginePromise, timeoutPromise]);
     engineInitialized = true;
-    console.log('AI engine initialized successfully');
-    
-    // Store initialization state
-    chrome.storage.local.set({ engineInitialized: true });
-    
+    engineInitializing = false;
+    console.log('✅ Background AI engine ready!');
     return engine;
   } catch (error) {
-    console.error('Failed to initialize AI engine:', error);
-    throw error;
-  } finally {
     engineInitializing = false;
+    engineInitialized = false;
+    console.error('❌ Failed to initialize AI engine:', error);
+    
+    // Try fallback to smaller model if the current one failed
+    if (currentModel !== "Qwen2.5-0.5B-Instruct-q4f16_1-MLC") {
+      console.log('🔄 Trying fallback to smaller model...');
+      currentModel = "Qwen2.5-0.5B-Instruct-q4f16_1-MLC";
+      return ensureEngine(); // Recursive retry with smaller model
+    }
+    
+    throw error;
   }
 }
 

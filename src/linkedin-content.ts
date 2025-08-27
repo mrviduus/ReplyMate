@@ -340,37 +340,85 @@ class LinkedInReplyMate {
     // Check if we should use smart comment analysis
     const useSmartAnalysis = topComments.length >= 2; // Need at least 2 liked comments
 
-    // First check engine status
-    chrome.runtime.sendMessage({
-      action: 'checkEngineStatus'
-    }, (statusResponse) => {
-      if (statusResponse?.initializing) {
-        this.showToast('AI model is loading. This may take a few minutes on first use...', 'error');
-      }
-    });
+    // First check engine status with error handling
+    try {
+      chrome.runtime.sendMessage({
+        action: 'checkEngineStatus'
+      }, (statusResponse) => {
+        if (chrome.runtime.lastError) {
+          console.warn('Extension context issue:', chrome.runtime.lastError);
+          this.showToast('Extension needs to be reloaded. Please refresh the page.', 'error');
+          this.updateButtonState(postId, 'error');
+          return;
+        }
+        
+        if (statusResponse?.initializing) {
+          this.showToast('AI model is loading. This may take a few minutes on first use...', 'error');
+        }
+      });
+    } catch (error) {
+      console.error('Error checking engine status:', error);
+      this.showToast('Extension error. Please refresh the page.', 'error');
+      this.updateButtonState(postId, 'error');
+      return;
+    }
+
+    // Add timeout for generation request
+    const requestTimeout = setTimeout(() => {
+      this.showToast('Request timed out. AI model may still be loading.', 'error');
+      this.updateButtonState(postId, 'error');
+    }, 30000); // 30 second timeout
 
     if (useSmartAnalysis) {
       // Show user that we're using smart analysis
       this.showToast('Analyzing top-performing comments for better reply...', 'success');
       
       // Send request with comment analysis
-      chrome.runtime.sendMessage({
-        action: 'generateLinkedInReplyWithComments',
-        postId: postId,
-        postContent: post.textContent,
-        topComments: topComments
-      }, (response) => {
-        this.handleReplyResponse(postId, response);
-      });
+      try {
+        chrome.runtime.sendMessage({
+          action: 'generateLinkedInReplyWithComments',
+          postId: postId,
+          postContent: post.textContent,
+          topComments: topComments
+        }, (response) => {
+          clearTimeout(requestTimeout);
+          if (chrome.runtime.lastError) {
+            console.warn('Runtime error:', chrome.runtime.lastError);
+            this.showToast('Extension connection lost. Please refresh the page.', 'error');
+            this.updateButtonState(postId, 'error');
+            return;
+          }
+          this.handleReplyResponse(postId, response);
+        });
+      } catch (error) {
+        clearTimeout(requestTimeout);
+        console.error('Error sending smart analysis request:', error);
+        this.showToast('Failed to generate reply. Please try again.', 'error');
+        this.updateButtonState(postId, 'error');
+      }
     } else {
       // Fall back to regular generation
-      chrome.runtime.sendMessage({
-        action: 'generateLinkedInReply',
-        postId: postId,
-        postContent: post.textContent
-      }, (response) => {
-        this.handleReplyResponse(postId, response);
-      });
+      try {
+        chrome.runtime.sendMessage({
+          action: 'generateLinkedInReply',
+          postId: postId,
+          postContent: post.textContent
+        }, (response) => {
+          clearTimeout(requestTimeout);
+          if (chrome.runtime.lastError) {
+            console.warn('Runtime error:', chrome.runtime.lastError);
+            this.showToast('Extension connection lost. Please refresh the page.', 'error');
+            this.updateButtonState(postId, 'error');
+            return;
+          }
+          this.handleReplyResponse(postId, response);
+        });
+      } catch (error) {
+        clearTimeout(requestTimeout);
+        console.error('Error sending generation request:', error);
+        this.showToast('Failed to generate reply. Please try again.', 'error');
+        this.updateButtonState(postId, 'error');
+      }
     }
   }
 
@@ -378,36 +426,59 @@ class LinkedInReplyMate {
     const post = this.posts.get(postId);
     if (!post) return;
 
-    if (chrome.runtime.lastError) {
-      console.error('Chrome runtime error:', chrome.runtime.lastError);
-      this.updateButtonState(postId, 'error');
-      this.showToast('Failed to connect to AI service', 'error');
-      return;
-    }
+    try {
+      if (chrome.runtime.lastError) {
+        console.error('Chrome runtime error:', chrome.runtime.lastError);
+        this.updateButtonState(postId, 'error');
+        this.showToast('Extension connection lost. Please refresh the page.', 'error');
+        return;
+      }
 
-    if (response?.reply) {
-      this.showReplyPanel(post, response.reply);
-      this.updateButtonState(postId, 'success');
-      
-      // Show special message if based on comment analysis
-      if (response.basedOnComments) {
-        this.showToast(
-          `Smart reply generated based on ${response.commentCount} top comments!`, 
-          'success'
-        );
+      if (!response) {
+        this.updateButtonState(postId, 'error');
+        this.showToast('No response received from AI service', 'error');
+        return;
       }
-      
-      // Show initialization warning if applicable
-      if (response.error && response.isInitializing) {
-        this.showToast('AI is still loading. This reply is a suggestion. Try again in a moment for AI-powered responses.', 'error');
+
+      if (response?.reply) {
+        this.showReplyPanel(post, response.reply);
+        this.updateButtonState(postId, 'success');
+        
+        // Show special message if based on comment analysis
+        if (response.basedOnComments) {
+          this.showToast(
+            `Smart reply generated based on ${response.commentCount} top comments!`, 
+            'success'
+          );
+        }
+        
+        // Show initialization warning if applicable
+        if (response.error && response.isInitializing) {
+          this.showToast('AI is still loading. This reply is a suggestion. Try again for AI-powered responses.', 'error');
+        }
+      } else if (response?.error) {
+        console.error('Reply generation error:', response.error);
+        this.updateButtonState(postId, 'error');
+        
+        // Provide user-friendly error messages
+        let errorMessage = response.error;
+        if (response.error.includes('timeout')) {
+          errorMessage = 'AI model is still loading. Please wait and try again.';
+        } else if (response.error.includes('Engine initialization')) {
+          errorMessage = 'AI model failed to load. Please reload the extension.';
+        } else if (response.error.includes('Extension context')) {
+          errorMessage = 'Extension needs to be reloaded. Please refresh the page.';
+        }
+        
+        this.showToast(errorMessage, 'error');
+      } else {
+        this.updateButtonState(postId, 'error');
+        this.showToast('Unexpected response format', 'error');
       }
-    } else if (response?.error) {
-      console.error('Reply generation error:', response.error);
+    } catch (error) {
+      console.error('Error handling reply response:', error);
       this.updateButtonState(postId, 'error');
-      this.showToast(response.error, 'error');
-    } else {
-      this.updateButtonState(postId, 'error');
-      this.showToast('No response received', 'error');
+      this.showToast('Failed to process response. Please try again.', 'error');
     }
   }
 
