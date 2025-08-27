@@ -15,6 +15,71 @@ import {
 } from "@mlc-ai/web-llm";
 import * as ProgressBar from "progressbar.js";
 
+// Model configuration for different use cases
+const MODEL_PROFILES = {
+  'professional': {
+    // Best for LinkedIn professional responses
+    models: ['Llama-3.2-3B-Instruct-q4f16_1-MLC', 'Llama-3.2-1B-Instruct-q4f16_1-MLC', 'gemma-2-2b-it-q4f16_1-MLC'],
+    description: 'Best quality for professional communication'
+  },
+  'balanced': {
+    // Good balance of speed and quality
+    models: ['Llama-3.2-1B-Instruct-q4f16_1-MLC', 'Phi-3.5-mini-instruct-q4f16_1-MLC', 'gemma-2-2b-it-q4f16_1-MLC'],
+    description: 'Balanced speed and quality'
+  },
+  'fast': {
+    // For quick responses on low-end devices
+    models: ['Qwen2.5-0.5B-Instruct-q4f16_1-MLC', 'TinyLlama-1.1B-Chat-v1.0-q4f16_1-MLC', 'Qwen2-0.5B-Instruct-q4f16_1-MLC'],
+    description: 'Fastest responses for low-end devices'
+  }
+} as const;
+
+type ModelProfileKey = keyof typeof MODEL_PROFILES;
+
+// Smart model selection based on device capabilities
+function getOptimalModel(): string {
+  try {
+    // Check device capabilities
+    const memory = (performance as any).memory?.usedJSHeapSize || 0;
+    const availableMemory = (performance as any).memory?.jsHeapSizeLimit || 4_000_000_000;
+    
+    // Check if user is on mobile/tablet
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    
+    // Get available models from the current model list
+    const availableModelIds = prebuiltAppConfig.model_list.map(m => m.model_id);
+    
+    let targetProfile: ModelProfileKey;
+    
+    if (isMobile || availableMemory < 4_000_000_000) {
+      targetProfile = 'fast';
+    } else if (availableMemory < 8_000_000_000) {
+      targetProfile = 'balanced';
+    } else {
+      targetProfile = 'professional';
+    }
+    
+    // Find the first available model from the target profile
+    for (const modelId of MODEL_PROFILES[targetProfile].models) {
+      if (availableModelIds.includes(modelId)) {
+        console.log(`🤖 Selected optimal model: ${modelId} (${MODEL_PROFILES[targetProfile].description})`);
+        return modelId;
+      }
+    }
+    
+    // Fallback to Llama-3.2-1B if available, otherwise first available model
+    const fallback = availableModelIds.find(id => id.includes('Llama-3.2-1B')) || 
+                    availableModelIds.find(id => id.includes('Llama')) ||
+                    availableModelIds[0];
+    
+    console.log(`🤖 Using fallback model: ${fallback}`);
+    return fallback;
+  } catch (error) {
+    console.warn('Error in model selection, using default:', error);
+    return "Llama-3.2-1B-Instruct-q4f16_1-MLC";
+  }
+}
+
 // modified setLabel to not throw error
 function setLabel(id: string, text: string) {
   const label = document.getElementById(id);
@@ -67,18 +132,63 @@ let initProgressCallback = (report: InitProgressReport) => {
   }
 };
 
-// initially selected model
-let selectedModel = "Qwen2-0.5B-Instruct-q4f16_1-MLC";
+// initially selected model - using smart selection for best performance
+let selectedModel = getOptimalModel();
 
 // populate model-selection
 const modelSelector = getElementAndCheck(
   "model-selection",
 ) as HTMLSelectElement;
-for (let i = 0; i < prebuiltAppConfig.model_list.length; ++i) {
-  const model = prebuiltAppConfig.model_list[i];
+
+// Get all recommended models from profiles
+const recommendedModels: string[] = [
+  ...MODEL_PROFILES.professional.models,
+  ...MODEL_PROFILES.balanced.models,
+  ...MODEL_PROFILES.fast.models
+];
+
+// Filter and sort models: recommended first, then others
+const allModels = prebuiltAppConfig.model_list.slice();
+const sortedModels = allModels.sort((a, b) => {
+  const aRecommended = recommendedModels.includes(a.model_id);
+  const bRecommended = recommendedModels.includes(b.model_id);
+  
+  if (aRecommended && !bRecommended) return -1;
+  if (!aRecommended && bRecommended) return 1;
+  
+  // Among recommended models, prioritize Llama > Gemma > Phi > Qwen
+  const getModelPriority = (id: string) => {
+    if (id.includes('Llama-3.2')) return 1;
+    if (id.includes('gemma-2')) return 2;
+    if (id.includes('Phi-3.5')) return 3;
+    if (id.includes('Qwen2.5')) return 4;
+    return 5;
+  };
+  
+  return getModelPriority(a.model_id) - getModelPriority(b.model_id);
+});
+
+for (const model of sortedModels) {
   const opt = document.createElement("option");
   opt.value = model.model_id;
-  opt.innerHTML = model.model_id;
+  
+  // Add helpful descriptions for recommended models
+  let displayName = model.model_id;
+  if (recommendedModels.includes(model.model_id)) {
+    if (model.model_id.includes('Llama-3.2-3B')) {
+      displayName += " (Best Quality)";
+    } else if (model.model_id.includes('Llama-3.2-1B')) {
+      displayName += " (Recommended)";
+    } else if (model.model_id.includes('gemma-2')) {
+      displayName += " (Google)";
+    } else if (model.model_id.includes('Phi-3.5')) {
+      displayName += " (Microsoft)";
+    } else if (model.model_id.includes('Qwen2.5-0.5B')) {
+      displayName += " (Fastest)";
+    }
+  }
+  
+  opt.innerHTML = displayName;
   opt.selected = false;
 
   // set initial selection as the initially selected model
