@@ -1,250 +1,134 @@
-# ReplyMate - AI-Powered LinkedIn Assistant
+# 🤖 ReplyMate - AI-Powered LinkedIn Assistant
 
-An intelligent Chrome extension that enhances your LinkedIn experience with AI-powered reply generation directly within LinkedIn posts, while maintaining full chat functionality for manual testing.
+> *Your intelligent writing companion for professional LinkedIn interactions*
 
-## 📚 Documentation
-
-- **[USER GUIDE](USER_GUIDE.md)** - Complete guide for installing and using ReplyMate
-- **[DEVELOPMENT GUIDE](DEVELOPMENT.md)** - Developer documentation for building and contributing
-- **[CI/CD PIPELINE](CICD.md)** - Continuous integration and deployment setup
-- **[REQUIREMENTS](docs/LinkedIn_ReplyMate_Requirements.md)** - Technical requirements and specifications
-
-## ✨ Features
-
-### LinkedIn Integration
-- **One-Click Reply Generation**: Generate professional replies directly on LinkedIn posts
-- **Regenerate Options**: Don't like the first suggestion? Generate alternatives
-- **Copy & Insert**: Easy copy-to-clipboard or direct insertion into comment boxes
-- **Native Styling**: Seamlessly blends with LinkedIn's interface
-- **Accessibility**: Full keyboard navigation and screen reader support
-- **Real-time Processing**: Works with infinite scroll and dynamic content
-
-### General Features
-- **Browser Chat**: Manual chat interface for testing and general AI interactions
-- **Local AI Models**: Powered by WebLLM (Qwen2/Llama models)
-- **Privacy-First**: All processing happens locally, no data sent to external servers
-- **Performance Optimized**: Minimal impact on page loading and scrolling
+An intelligent Chrome extension that enhances your LinkedIn experience with AI-powered reply suggestions, running entirely locally for privacy and security.
 
 ## 🚀 Quick Start
 
 ### For Users
-1. **Install from Chrome Web Store** (when available)
-2. **Or download from [Releases](https://github.com/mrviduus/ReplyMate/releases)**
-3. **Follow the [User Guide](USER_GUIDE.md)** for complete setup instructions
+1. **[Download from Releases](https://github.com/mrviduus/ReplyMate/releases)** or install from Chrome Web Store (coming soon)
+2. **[Follow the User Guide](USER_GUIDE.md)** for complete setup instructions
 
 ### For Developers
 ```bash
-# Clone and setup
 git clone https://github.com/mrviduus/ReplyMate.git
 cd ReplyMate
-npm install
+npm install && npm run build
+```
 
-# Development workflow
-npm run dev          # Start development mode
-npm run test         # Run tests
-npm run build        # Build for production
+## 📚 Documentation
+
+| Guide | Description |
+|-------|-------------|
+| **[🎯 User Guide](USER_GUIDE.md)** | Installation and usage instructions |
+| **[👩‍💻 Development Guide](DEVELOPMENT.md)** | Building, testing, and contributing |
+| **[🏗️ Architecture Guide](docs/ARCHITECTURE.md)** | How ReplyMate works (explained simply) |
+| **[🔧 CI/CD Pipeline](CICD.md)** | Automated building and deployment |
+| **[� Full Documentation](docs/README.md)** | Complete documentation index |
+| **[🛠️ Troubleshooting](docs/troubleshooting/TROUBLESHOOTING.md)** | Common issues and solutions |
+
+## ✨ Key Features
+
+### 🎯 LinkedIn Integration
+- **Smart Post Detection**: Automatically finds LinkedIn posts as you scroll
+- **One-Click Suggestions**: Generate professional replies with a single click
+- **Multiple Options**: Regenerate if you want different suggestions
+- **Seamless Integration**: Copy to clipboard or insert directly into comment boxes
+
+### 🛡️ Privacy & Security
+- **100% Local Processing**: AI runs on your device, no data sent to external servers
+- **No Account Required**: Works without login or data collection
+- **Open Source**: Full transparency with public code
+
+### 🎨 User Experience
+- **Native LinkedIn Styling**: Blends perfectly with LinkedIn's interface
+- **Accessibility Ready**: Full keyboard navigation and screen reader support
+- **Performance Optimized**: Minimal impact on page loading
+
+## 🎯 How It Works
+
+1. **Visit LinkedIn** → ReplyMate automatically detects posts
+2. **Click "Generate Reply"** → AI analyzes the post content
+3. **Review & Use** → Choose to regenerate, copy, or insert the suggestion
+4. **Stay Authentic** → Always review and personalize before posting
+
+## � Installation & Development
+
+### Option 1: Automated Setup
+```bash
+./install.sh    # Installs dependencies, builds, and validates everything
+```
+
+### Option 2: Manual Setup
+```bash
+npm install     # Install dependencies
+npm run build   # Build the extension
+```
+
+Then load in Chrome:
+1. Open `chrome://extensions/`
+2. Enable "Developer mode"
+3. Click "Load unpacked" → Select `dist/` folder
+4. Pin ReplyMate to your toolbar
+
+### Development Commands
+```bash
+npm run dev          # Development mode with hot reload
+npm run test         # Run test suite
+npm run build        # Production build
 npm run package      # Create distribution packages
+npm run lint         # Code quality checks
 ```
 
-See the **[Development Guide](DEVELOPMENT.md)** for detailed instructions.
+## 🛡️ Important Notice
 
-## 📦 Installation Options
+**Professional Use Guidelines**: ReplyMate provides AI-generated suggestions to enhance your LinkedIn interactions. Please:
+- ✅ Always review suggestions before posting
+- ✅ Personalize content to match your voice
+- ✅ Ensure compliance with LinkedIn's Terms of Service
+- ✅ Use responsibly and authentically
 
-### Option 1: Automated Installation
-Run the automated installation script:
-```bash
-./install.sh
-```
+## 🏗️ Technical Overview
 
-This script will:
-- Check prerequisites (Node.js, npm, Chrome)
-- Install dependencies
-- Build the extension
-- Validate all files
-- Optionally open Chrome extensions page
+**Architecture**: Chrome Extension (Manifest V3) with local AI processing
+**AI Engine**: WebLLM with Qwen2/Llama models
+**Languages**: TypeScript, JavaScript, HTML, CSS
+**Testing**: Jest with comprehensive test coverage
+**Build**: Parcel with custom scripts
 
-### Option 2: Manual Installation
-```bash
-npm install
-npm run build
-```
+For detailed technical information, see the [Architecture Guide](docs/ARCHITECTURE.md).
 
-Then load the extension in Chrome:
-1. Open Chrome and go to `chrome://extensions/`
-2. Enable "Developer mode" (toggle in top right)
-3. Click "Load unpacked" and select the `dist/` directory
-4. Pin the ReplyMate extension to your toolbar
+## 📊 Project Status
 
-## 🎯 Usage
+| Aspect | Status |
+|--------|--------|
+| ✅ Tests | All passing (132 tests) |
+| ✅ Build | Automated with CI/CD |
+| ✅ Code Quality | ESLint, Prettier, TypeScript |
+| ✅ Security | Local processing, no data collection |
+| 🔄 Chrome Store | Preparing for submission |
 
-### LinkedIn Reply Generation
-1. **Navigate to LinkedIn**: Open [linkedin.com](https://linkedin.com) in your browser
-2. **Browse Posts**: Scroll through your LinkedIn feed as normal
-3. **Generate Replies**: Click the "Generate Reply" button that appears on each post
-4. **Review & Edit**: Review the AI-generated reply in the panel below the post
-5. **Take Action**: 
-   - **Regenerate**: Create a new suggestion
-   - **Copy**: Copy to clipboard for use elsewhere
-   - **Insert**: Automatically insert into LinkedIn's comment box
-
-### Manual Chat Interface
-1. **Open Extension**: Click the ReplyMate icon in your Chrome toolbar
-2. **Select Model**: Choose your preferred AI model from the dropdown
-3. **Start Chatting**: Type your questions or requests
-4. **Get Responses**: Receive AI-powered responses for any topic
-
-## 🔄 CI/CD & Release Pipeline
-
-ReplyMate includes a comprehensive CI/CD pipeline with automated testing, building, and releasing:
-
-### Automated Workflows
-- **✅ Continuous Integration**: Tests and builds on every push
-- **✅ Code Quality**: ESLint, Prettier, and TypeScript checking
-- **✅ Security Scanning**: Dependency audits and CodeQL analysis
-- **✅ Automated Releases**: GitHub releases with ZIP packages
-
-### Version Management
-```bash
-# Bump version and create release
-./scripts/version-bump.sh --type patch
-git push origin main --tags
-
-# This automatically triggers:
-# 1. GitHub Actions build and test
-# 2. Release creation with assets
-# 3. ZIP package generation for Chrome Web Store
-```
-
-### Build Scripts
-```bash
-./scripts/build.sh      # Comprehensive build with validation
-./scripts/package.sh    # Create distribution packages
-./scripts/version-bump.sh # Version management
-```
-
-See **[CI/CD Documentation](CICD.md)** for complete pipeline details.
-
-## 🛡️ Important Compliance Notice
-
-**LinkedIn Terms of Service Warning**: This extension provides tools for generating reply suggestions. Users are responsible for:
-- Reviewing all generated content before posting
-- Ensuring compliance with LinkedIn's Terms of Service
-- Using automation features responsibly
-- Understanding that automated interactions may violate platform policies
-
-The extension displays this warning in the browser console when used on LinkedIn.
-
-## Technical Architecture
-
-### Content Scripts
-- **General Content Script** (`content.js`): Handles page content extraction for manual chat
-- **LinkedIn Content Script** (`linkedin-content.ts`): Manages post detection, button injection, and reply UI
-
-### Background Service
-- **AI Engine Integration**: WebLLM-powered local inference
-- **Message Routing**: Handles communication between content scripts and popup
-- **LinkedIn-Specific Processing**: Optimized prompts for professional networking content
-
-### Styling
-- **Responsive Design**: Works on desktop and mobile LinkedIn
-- **Accessibility**: WCAG compliant with proper contrast ratios and keyboard navigation
-- **Native Integration**: Matches LinkedIn's visual design language
-
-## Development
-
-### Running Tests
-```bash
-npm run test          # Run all tests
-npm run test:watch    # Continuous testing during development
-npm run test:coverage # Generate coverage report
-npm run test:ci       # CI-friendly test run
-```
-
-### Development Workflow
-1. **Make Changes**: Edit source files in `src/`
-2. **Build**: Run `npm run build` to compile
-3. **Reload Extension**: Go to `chrome://extensions/` and click reload
-4. **Test**: Visit LinkedIn to test functionality
-
-### Test Coverage
-- Unit tests for core functionality
-- Integration tests for LinkedIn-specific features
-- DOM interaction testing
-- Accessibility compliance testing
-- Error handling and edge cases
-
-## Project Structure
-
-```
-src/
-├── manifest.json              # Extension manifest with LinkedIn permissions
-├── popup.html/ts/css         # Manual chat interface
-├── content.js                # General content script
-├── linkedin-content.ts       # LinkedIn-specific functionality
-├── linkedin-styles.css       # LinkedIn-specific styling
-├── background.ts             # Background service worker with AI engine
-└── icons/                    # Extension icons
-
-tests/
-├── linkedin-integration.test.ts  # LinkedIn feature tests
-├── popup-utils.test.ts           # Popup functionality tests
-└── ...                          # Other test files
-```
-
-## Acceptance Criteria Compliance
-
-- **F-1**: Recognizes LinkedIn pages automatically  
-- **F-2**: Detects posts dynamically with infinite scroll  
-- **F-3**: Injects "Generate Reply" buttons near comment controls  
-- **F-4**: Sends post content to local AI model  
-- **F-5**: Displays generated comments in compact panels  
-- **F-6**: Provides Regenerate, Copy, and Insert controls  
-- **F-7**: Maintains functionality with dynamic content loading  
-- **F-8**: Blends with LinkedIn's native styling  
-- **F-9**: Shows ToS compliance warning in console  
-- **F-10**: Complies with Chrome Manifest V3  
-
-### Performance Metrics
-- **Button Visibility**: >95% of visible posts receive buttons
-- **Response Time**: <3 seconds for typical reply generation
-- **Action Reliability**: All buttons (Regenerate, Copy, Insert) function without errors
-- **Visual Integration**: No significant visual regressions in Lighthouse audits
-
-## Troubleshooting
-
-### Common Issues
-
-**Extension not loading on LinkedIn**
-- Ensure you're on a `linkedin.com` domain
-- Check that the extension is enabled in Chrome
-- Try refreshing the page
-
-**Generate button not appearing**
-- LinkedIn may have updated their DOM structure
-- Check browser console for errors
-- Try scrolling to load more posts
-
-**AI model not responding**
-- First use requires model download (may take several minutes)
-- Ensure stable internet connection for initial setup
-- Check console for WebLLM initialization status
-
-**Reply insertion not working**
-- Try clicking LinkedIn's "Comment" button first
-- Different post types may have different comment box structures
-- Use "Copy" as alternative and paste manually
-
-## Contributing
+## 🤝 Contributing
 
 1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add/update tests
-5. Ensure all tests pass
-6. Submit a pull request
+2. Create a feature branch: `git checkout -b feature/amazing-feature`
+3. Make your changes and add tests
+4. Ensure all tests pass: `npm test`
+5. Submit a pull request
 
-## Acknowledgments
+See the [Development Guide](DEVELOPMENT.md) for detailed contributing instructions.
+
+## 📄 License
+
+This project is licensed under the ISC License - see the LICENSE file for details.
+
+## 🙏 Acknowledgments
 
 - [WebLLM](https://github.com/mlc-ai/web-llm) for local AI inference
-- LinkedIn for providing a platform for professional networking
 - The open-source community for tools and inspiration
+- LinkedIn for providing a platform for professional networking
+
+---
+
+**Made with ❤️ for the professional community**

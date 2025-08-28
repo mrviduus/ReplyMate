@@ -1,13 +1,16 @@
 {
   "name": "replymate-extension",
   "version": "0.2.6",
-  "description": "An intelligent assistant for your browser.",
+  "description": "AI-powered LinkedIn assistant for generating professional reply suggestions locally in your browser",
   "private": true,
   "scripts": {
+    "dev": "parcel watch src/manifest.json --config @parcel/config-webextension",
     "build": "parcel build src/manifest.json --config @parcel/config-webextension",
     "build:script": "./scripts/build.sh",
     "package": "./scripts/package.sh",
     "version:bump": "./scripts/version-bump.sh",
+    "zip": "npm run build && npm run package",
+    "clean": "rm -rf dist packages .parcel-cache",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
@@ -18,13 +21,19 @@
     "format": "prettier --write \"src/**/*.{ts,js,css,html,json}\"",
     "format:check": "prettier --check \"src/**/*.{ts,js,css,html,json}\"",
     "type-check": "tsc --noEmit --project tsconfig.json",
-    "validate-manifest": "node -e \"const m=require('./dist/manifest.json'); console.log('✅ Valid:', m.name, 'v'+m.version)\"",
-    "clean": "rm -rf dist packages .parcel-cache",
-    "dev": "parcel watch src/manifest.json --config @parcel/config-webextension",
-    "zip": "npm run build && npm run package"
+    "validate-manifest": "node -e \"const m=require('./dist/manifest.json'); console.log('✅ Valid:', m.name, 'v'+m.version)\""
   },
-  "author": "",
+  "keywords": ["chrome-extension", "linkedin", "ai", "reply-assistant", "webllm", "productivity"],
+  "author": "ReplyMate Team",
   "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mrviduus/ReplyMate.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mrviduus/ReplyMate/issues"
+  },
+  "homepage": "https://github.com/mrviduus/ReplyMate#readme",
   "devDependencies": {
     "@parcel/config-webextension": "^2.9.3",
     "@testing-library/dom": "^10.4.0",
