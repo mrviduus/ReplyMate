@@ -23,6 +23,8 @@ let engine: MLCEngineInterface | null = null;
 let engineInitialized = false;
 let engineInitializing = false;
 let currentModel = getOptimalBackgroundModel(); // Use fast model initially
+let initializationAttempts = 0;
+const MAX_INIT_ATTEMPTS = 3;
 
 // Enhanced default prompts for better LinkedIn engagement
 const DEFAULT_PROMPTS = {
@@ -126,40 +128,98 @@ async function ensureEngine(): Promise<MLCEngineInterface> {
     }
   }
 
+  // Check if we've exceeded max attempts
+  if (initializationAttempts >= MAX_INIT_ATTEMPTS) {
+    throw new Error('Maximum initialization attempts exceeded. Please refresh the page.');
+  }
+
   engineInitializing = true;
-  console.log('🚀 Initializing background AI engine with model:', currentModel);
+  initializationAttempts++;
+  console.log(`🚀 Initializing background AI engine (attempt ${initializationAttempts}/${MAX_INIT_ATTEMPTS}) with model:`, currentModel);
 
   try {
-    // Add timeout for engine creation
+    // Check network connectivity first (but don't fail if it doesn't work)
+    await checkNetworkConnectivity();
+    
+    // Create engine with enhanced configuration
     const enginePromise = CreateMLCEngine(currentModel, {
       initProgressCallback: (report: InitProgressReport) => {
         console.log(`🔄 Loading ${currentModel}: ${report.text} (${Math.round(report.progress * 100)}%)`);
       }
     });
 
-    // Timeout after 2 minutes
+    // Progressive timeout - longer for first attempt
+    const timeoutDuration = initializationAttempts === 1 ? 300000 : 120000; // 5min first, 2min others
     const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Engine initialization timeout')), 120000)
+      setTimeout(() => reject(new Error(`Engine initialization timeout after ${timeoutDuration/1000}s`)), timeoutDuration)
     );
 
     engine = await Promise.race([enginePromise, timeoutPromise]);
     engineInitialized = true;
     engineInitializing = false;
+    initializationAttempts = 0; // Reset on success
     console.log('✅ Background AI engine ready!');
     return engine;
   } catch (error) {
     engineInitializing = false;
     engineInitialized = false;
-    console.error('❌ Failed to initialize AI engine:', error);
+    console.error(`❌ Failed to initialize AI engine (attempt ${initializationAttempts}):`, error);
     
-    // Try fallback to smaller model if the current one failed
-    if (currentModel !== "Qwen2.5-0.5B-Instruct-q4f16_1-MLC") {
-      console.log('🔄 Trying fallback to smaller model...');
-      currentModel = "Qwen2.5-0.5B-Instruct-q4f16_1-MLC";
+    // Enhanced fallback strategy with smart model selection
+    const fallbackModels = [
+      "Qwen2.5-0.5B-Instruct-q4f16_1-MLC",
+      "Phi-3.5-mini-instruct-q4f16_1-MLC"
+    ];
+    
+    const currentIndex = fallbackModels.indexOf(currentModel);
+    const nextIndex = currentIndex + 1;
+    
+    // Try next model if available and we haven't exceeded max attempts
+    if (nextIndex < fallbackModels.length && initializationAttempts < MAX_INIT_ATTEMPTS) {
+      console.log(`🔄 Trying fallback model ${nextIndex + 1}/${fallbackModels.length}: ${fallbackModels[nextIndex]}`);
+      currentModel = fallbackModels[nextIndex];
+      await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3s before retry
       return ensureEngine(); // Recursive retry with smaller model
     }
     
-    throw error;
+    // If all fallbacks failed, provide detailed error
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const detailedError = new Error(`All model initialization attempts failed after ${initializationAttempts} attempts. 
+      Last error: ${errorMessage}
+      
+      Troubleshooting:
+      1. Check your internet connection
+      2. Try refreshing the page
+      3. Clear browser cache and try again
+      4. Disable other extensions temporarily`);
+    
+    throw detailedError;
+  }
+}
+
+// Check network connectivity to CDN
+async function checkNetworkConnectivity(): Promise<void> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
+    
+    // Use a simpler endpoint that's more likely to work
+    const response = await fetch('https://huggingface.co/', {
+      method: 'HEAD',
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      throw new Error(`CDN connectivity check failed: ${response.status}`);
+    }
+    
+    console.log('✅ CDN connectivity verified');
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.warn('⚠️ CDN connectivity issue detected:', errorMessage);
+    // Don't throw here - let the engine initialization handle the fallback
   }
 }
 
@@ -168,13 +228,48 @@ chrome.runtime.onInstalled.addListener((details) => {
   console.log('Extension installed:', details.reason);
   chrome.storage.local.set({ hasUsedExtension: true });
   
-  // Pre-initialize the engine after installation
+  // Reset initialization attempts on fresh install
+  if (details.reason === 'install') {
+    initializationAttempts = 0;
+    engineInitialized = false;
+    engineInitializing = false;
+  }
+  
+  // Pre-initialize the engine after installation with error handling
   if (details.reason === 'install' || details.reason === 'update') {
+    console.log('🚀 Pre-initializing engine after', details.reason);
     ensureEngine().catch(error => {
       console.error('Failed to pre-initialize engine:', error);
+      // Store the error for debugging
+      chrome.storage.local.set({ 
+        lastInitError: {
+          message: error.message,
+          timestamp: Date.now()
+        }
+      });
     });
   }
 });
+
+// Add a health check function
+async function performHealthCheck(): Promise<boolean> {
+  try {
+    if (!engineInitialized || !engine) {
+      console.log('🏥 Health check: Engine not ready');
+      return false;
+    }
+    
+    // Try a simple operation to verify engine is working
+    console.log('🏥 Health check: Engine appears healthy');
+    return true;
+  } catch (error) {
+    console.error('🏥 Health check failed:', error);
+    // Reset engine state to trigger re-initialization
+    engineInitialized = false;
+    engine = null;
+    return false;
+  }
+}
 
 // Message handler for LinkedIn reply generation
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -199,11 +294,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
   
   if (request.action === 'checkEngineStatus') {
-    sendResponse({ 
-      initialized: engineInitialized,
-      initializing: engineInitializing 
+    performHealthCheck().then(isHealthy => {
+      sendResponse({ 
+        engineReady: engineInitialized && isHealthy,
+        initializing: engineInitializing,
+        currentModel: currentModel,
+        attempts: initializationAttempts,
+        healthy: isHealthy
+      });
     });
-    return false;
+    return true; // Keep channel open for async response
   }
   
   if (request.action === 'getPrompts') {

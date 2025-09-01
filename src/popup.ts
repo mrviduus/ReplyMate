@@ -686,18 +686,71 @@ function sendMessageAsync(message: any): Promise<any> {
 // Initialize the popup AI engine for chat functionality
 async function initializePopupEngine() {
   try {
+    console.log('🚀 Initializing popup engine with model:', selectedModel);
     modelName.innerText = "Loading chat model...";
+    
+    // Enhanced initialization with better error handling
     const engine: MLCEngineInterface = await CreateMLCEngine(selectedModel, {
       initProgressCallback: initProgressCallback,
     });
+    
     modelName.innerText = "Now chatting with " + modelDisplayName;
     
     // Store engine globally for chat functionality
     (window as any).popupEngine = engine;
+    console.log('✅ Popup engine initialized successfully');
     
   } catch (error) {
-    console.error('Failed to initialize popup engine:', error);
-    modelName.innerText = "Failed to load chat model";
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('❌ Failed to initialize popup engine:', error);
+    
+    // Check if it's a cache-related error
+    if (errorMessage.includes('Cache') || errorMessage.includes('NetworkError')) {
+      console.log('🔄 Cache error detected, trying to clear cache and retry...');
+      
+      try {
+        // Try to clear the cache and retry
+        if ('caches' in window) {
+          const cacheNames = await caches.keys();
+          await Promise.all(cacheNames.map(name => caches.delete(name)));
+          console.log('🧹 Cache cleared successfully');
+        }
+        
+        // Wait a bit and retry with a smaller model
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Try with the fastest model as fallback
+        const fallbackModel = "Qwen2.5-0.5B-Instruct-q4f16_1-MLC";
+        if (selectedModel !== fallbackModel) {
+          console.log(`🔄 Retrying with fallback model: ${fallbackModel}`);
+          
+          const fallbackEngine: MLCEngineInterface = await CreateMLCEngine(fallbackModel, {
+            initProgressCallback: initProgressCallback,
+          });
+          
+          modelName.innerText = "Now chatting with Qwen2.5-0.5B (Fallback)";
+          (window as any).popupEngine = fallbackEngine;
+          console.log('✅ Popup engine initialized with fallback model');
+          return;
+        }
+      } catch (retryError) {
+        console.error('❌ Fallback initialization also failed:', retryError);
+      }
+    }
+    
+    // Show user-friendly error message
+    modelName.innerText = "Failed to load chat model - check connection";
+    
+    // Create a mock engine that shows helpful error messages
+    (window as any).popupEngine = {
+      chat: {
+        completions: {
+          create: async () => {
+            throw new Error("Chat model not available. Please check your internet connection and try refreshing the page.");
+          }
+        }
+      }
+    };
   }
 }
 
