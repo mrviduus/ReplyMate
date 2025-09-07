@@ -2,6 +2,10 @@
 
 Welcome to the complete documentation for ReplyMate - your AI-powered LinkedIn assistant!
 
+## 🏪 Chrome Web Store
+
+**[📥 Install ReplyMate from Chrome Web Store](https://chromewebstore.google.com/detail/replymate/ehakmbhencmboidbhjecighefplfbgmh?hl=en-US&utm_source=ext_sidebar)**
+
 ## 🚀 Getting Started
 
 | Document | Description | Audience |
