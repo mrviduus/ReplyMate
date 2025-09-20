@@ -1,4 +1,5 @@
-import { CreateMLCEngine, MLCEngineInterface, ChatCompletionMessageParam, InitProgressReport } from "@mlc-ai/web-llm";
+import { MLCEngineInterface, ChatCompletionMessageParam } from "@mlc-ai/web-llm";
+import OptimizedModelLoader from './model-loader';
 
 console.log('Background service worker loaded');
 
@@ -18,13 +19,12 @@ function getOptimalBackgroundModel(): string {
   return "Qwen2.5-0.5B-Instruct-q4f16_1-MLC"; // Fastest model for initial load
 }
 
-// Keep track of the AI engine
+// Keep track of the AI engine using optimized loader
+const modelLoader = OptimizedModelLoader.getInstance();
 let engine: MLCEngineInterface | null = null;
 let engineInitialized = false;
 let engineInitializing = false;
 let currentModel = getOptimalBackgroundModel(); // Use fast model initially
-let initializationAttempts = 0;
-const MAX_INIT_ATTEMPTS = 3;
 
 // Enhanced default prompts for better LinkedIn engagement
 const DEFAULT_PROMPTS = {
@@ -106,7 +106,7 @@ async function getUserPrompt(type: 'withComments' | 'standard'): Promise<string>
   }
 }
 
-// Initialize engine on first use with better error handling and timeouts
+// Initialize engine on first use with optimized loader
 async function ensureEngine(): Promise<MLCEngineInterface> {
   if (engine && engineInitialized) {
     return engine;
@@ -120,7 +120,7 @@ async function ensureEngine(): Promise<MLCEngineInterface> {
       await new Promise(resolve => setTimeout(resolve, 500));
       attempts++;
     }
-    
+
     if (engine && engineInitialized) {
       return engine;
     } else {
@@ -128,71 +128,46 @@ async function ensureEngine(): Promise<MLCEngineInterface> {
     }
   }
 
-  // Check if we've exceeded max attempts
-  if (initializationAttempts >= MAX_INIT_ATTEMPTS) {
-    throw new Error('Maximum initialization attempts exceeded. Please refresh the page.');
-  }
-
   engineInitializing = true;
-  initializationAttempts++;
-  console.log(`🚀 Initializing background AI engine (attempt ${initializationAttempts}/${MAX_INIT_ATTEMPTS}) with model:`, currentModel);
+  console.log(`🚀 Initializing background AI engine with optimized loader`);
 
   try {
     // Check network connectivity first (but don't fail if it doesn't work)
     await checkNetworkConnectivity();
-    
-    // Create engine with enhanced configuration
-    const enginePromise = CreateMLCEngine(currentModel, {
-      initProgressCallback: (report: InitProgressReport) => {
-        console.log(`🔄 Loading ${currentModel}: ${report.text} (${Math.round(report.progress * 100)}%)`);
-      }
+
+    // Get optimal model based on system resources
+    const optimalModel = await modelLoader.getOptimalModel();
+    currentModel = optimalModel;
+
+    // Use optimized loader with progress tracking
+    engine = await modelLoader.loadModel(currentModel, (state) => {
+      console.log(`🔄 ${state.progressText} (${Math.round(state.progress * 100)}%)`);
+    }, {
+      maxRetries: 3,
+      timeoutMs: 120000,
+      preload: false
     });
 
-    // Progressive timeout - longer for first attempt
-    const timeoutDuration = initializationAttempts === 1 ? 300000 : 120000; // 5min first, 2min others
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error(`Engine initialization timeout after ${timeoutDuration/1000}s`)), timeoutDuration)
-    );
-
-    engine = await Promise.race([enginePromise, timeoutPromise]);
     engineInitialized = true;
     engineInitializing = false;
-    initializationAttempts = 0; // Reset on success
-    console.log('✅ Background AI engine ready!');
+    console.log('✅ Background AI engine ready with optimized loader!');
     return engine;
   } catch (error) {
     engineInitializing = false;
     engineInitialized = false;
-    console.error(`❌ Failed to initialize AI engine (attempt ${initializationAttempts}):`, error);
-    
-    // Enhanced fallback strategy with smart model selection
-    const fallbackModels = [
-      "Qwen2.5-0.5B-Instruct-q4f16_1-MLC",
-      "Phi-3.5-mini-instruct-q4f16_1-MLC"
-    ];
-    
-    const currentIndex = fallbackModels.indexOf(currentModel);
-    const nextIndex = currentIndex + 1;
-    
-    // Try next model if available and we haven't exceeded max attempts
-    if (nextIndex < fallbackModels.length && initializationAttempts < MAX_INIT_ATTEMPTS) {
-      console.log(`🔄 Trying fallback model ${nextIndex + 1}/${fallbackModels.length}: ${fallbackModels[nextIndex]}`);
-      currentModel = fallbackModels[nextIndex];
-      await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3s before retry
-      return ensureEngine(); // Recursive retry with smaller model
-    }
-    
+    console.error(`❌ Failed to initialize AI engine:`, error);
+
     // If all fallbacks failed, provide detailed error
     const errorMessage = error instanceof Error ? error.message : String(error);
-    const detailedError = new Error(`All model initialization attempts failed after ${initializationAttempts} attempts. 
+    const detailedError = new Error(`Model initialization failed.
       Last error: ${errorMessage}
-      
+
       Troubleshooting:
       1. Check your internet connection
       2. Try refreshing the page
       3. Clear browser cache and try again
       4. Disable other extensions temporarily`);
-    
+
     throw detailedError;
   }
 }
@@ -228,9 +203,8 @@ chrome.runtime.onInstalled.addListener((details) => {
   console.log('Extension installed:', details.reason);
   chrome.storage.local.set({ hasUsedExtension: true });
   
-  // Reset initialization attempts on fresh install
+  // Reset initialization state on fresh install
   if (details.reason === 'install') {
-    initializationAttempts = 0;
     engineInitialized = false;
     engineInitializing = false;
   }
@@ -295,11 +269,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   
   if (request.action === 'checkEngineStatus') {
     performHealthCheck().then(isHealthy => {
-      sendResponse({ 
+      sendResponse({
         engineReady: engineInitialized && isHealthy,
         initializing: engineInitializing,
         currentModel: currentModel,
-        attempts: initializationAttempts,
         healthy: isHealthy
       });
     });

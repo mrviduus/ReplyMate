@@ -23,7 +23,14 @@
     "type-check": "tsc --noEmit --project tsconfig.json",
     "validate-manifest": "node -e \"const m=require('./dist/manifest.json'); console.log('✅ Valid:', m.name, 'v'+m.version)\""
   },
-  "keywords": ["chrome-extension", "linkedin", "ai", "reply-assistant", "webllm", "productivity"],
+  "keywords": [
+    "chrome-extension",
+    "linkedin",
+    "ai",
+    "reply-assistant",
+    "webllm",
+    "productivity"
+  ],
   "author": "ReplyMate Team",
   "license": "ISC",
   "repository": {
@@ -44,7 +51,6 @@
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
     "buffer": "^6.0.3",
-    "chrome-types": "^0.1.361",
     "eslint": "^8.57.0",
     "eslint-plugin-jest": "^27.9.0",
     "identity-obj-proxy": "^3.0.0",
@@ -55,8 +61,7 @@
     "prettier": "^3.2.5",
     "process": "^0.11.10",
     "ts-jest": "^29.4.0",
-    "typescript": "^5.3.0",
-    "url": "^0.11.1"
+    "typescript": "^5.3.0"
   },
   "dependencies": {
     "@mlc-ai/web-llm": "^0.2.79",
