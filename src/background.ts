@@ -28,9 +28,9 @@ let currentModel = getOptimalBackgroundModel(); // Use fast model initially
 
 // Enhanced default prompts for better LinkedIn engagement
 const DEFAULT_PROMPTS = {
-  withComments: `You are a LinkedIn engagement expert who analyzes successful comments to write compelling replies.
+  withComments: `You are a LinkedIn engagement expert. Respond DIRECTLY with the reply text only - no preambles, no explanations.
 
-CRITICAL: Your response must be EXACTLY 1 sentence (maximum 25 words).
+CRITICAL: Output 1-2 impactful sentences (maximum 40 words total). Start immediately with your response.
 
 SMART ANALYSIS:
 - Study the top-performing comments' tone, style, and engagement patterns
@@ -50,9 +50,9 @@ ENGAGEMENT MULTIPLIERS:
 - Use "we" language to create community feeling
 - Be conversational but professional`,
 
-  standard: `You are a LinkedIn communication expert who writes highly engaging, professional replies.
+  standard: `You are a LinkedIn expert. Respond DIRECTLY with the reply text only - no preambles, no explanations.
 
-CRITICAL: Your response must be EXACTLY 1 sentence (maximum 25 words).
+CRITICAL: Output 1-2 impactful sentences (maximum 40 words total). Start immediately with your response.
 
 HIGH-IMPACT REPLY FORMULA:
 1. Hook: Start with something attention-grabbing ("Actually...", "This reminds me...", "What's interesting...")
@@ -587,12 +587,14 @@ POST CONTENT:
 ${topCommentsContext}
 
 CRITICAL REQUIREMENTS:
-- EXACTLY 1 sentence only (maximum 25 words)
-- No introductory phrases like "Great post!" 
+- 1-2 impactful sentences (maximum 40 words total)
+- No introductory phrases like "Great post!"
 - Add genuine value or ask a thoughtful question
 - Be conversational and engaging
+- DO NOT include any preambles like "Here's a reply:" or explanations
+- Start your response immediately with the actual content
 
-Your reply (1 sentence only):`;
+Write your reply directly (no preambles):`;
 
     const messages: ChatCompletionMessageParam[] = [
       { role: "system", content: systemPrompt },
@@ -605,10 +607,10 @@ Your reply (1 sentence only):`;
     const completion = await engine.chat.completions.create({
       stream: true,
       messages: messages,
-      max_tokens: 40, // Drastically reduced for 1 sentence only
+      max_tokens: 80, // Increased for better quality (1-2 sentences)
       temperature: 0.7,
       top_p: 0.9,
-      stop: ["\n", ".", "!", "?"] // Stop at first sentence ending
+      stop: ["\n\n", "\n\n\n"] // Only stop on double newlines
     });
 
     for await (const chunk of completion) {
@@ -618,11 +620,43 @@ Your reply (1 sentence only):`;
       }
     }
 
-    const cleanedReply = reply.trim();
-    
-    // Ensure it's really just one sentence
+    // Remove common preambles and meta-text
+    const cleanReply = (text: string): string => {
+      // Remove common preambles
+      const preamblePatterns = [
+        /^Here'?s? (?:a |the |your |my )?(?:professional |rewritten |revised |improved )?(?:LinkedIn |response|reply|version|comment).*?:\s*/i,
+        /^This (?:is |would be |could be )?(?:a |the |your |my )?(?:LinkedIn |response|reply).*?:\s*/i,
+        /^(?:Sure|Certainly|Absolutely)[,!]?\s*(?:here'?s?|this is).*?:\s*/i,
+        /^I'?(?:ve|ll|d)? (?:rewritten|revised|created|generated|made).*?:\s*/i,
+        /^(?:Response|Reply|Comment|Answer):\s*/i,
+        /^Here you go:\s*/i,
+        /^.*?(?:meets?|meeting|fulfill?s?) (?:the |your )?requirements?.*?:\s*/i,
+      ];
+
+      let cleaned = text.trim();
+      for (const pattern of preamblePatterns) {
+        cleaned = cleaned.replace(pattern, '');
+      }
+
+      // Also remove any lines that are just meta-commentary
+      const lines = cleaned.split('\n');
+      const contentLines = lines.filter(line => {
+        const lower = line.toLowerCase().trim();
+        return !lower.startsWith('here') &&
+               !lower.includes('rewritten') &&
+               !lower.includes('requirements') &&
+               !lower.includes('professional linkedin');
+      });
+
+      return contentLines.join(' ').trim();
+    };
+
+    const cleanedReply = cleanReply(reply);
+
+    // Limit to 1-2 sentences for quality
     const sentences = cleanedReply.split(/[.!?]+/).filter(s => s.trim().length > 0);
-    const finalReply = sentences[0].trim() + (cleanedReply.includes('?') ? '?' : '.');
+    const maxSentences = sentences.slice(0, 2).join('. ');
+    const finalReply = maxSentences.trim() + (cleanedReply.endsWith('?') ? '' : '.');
     
     console.log('🟢 STEP 5G: Generation complete:', finalReply);
     console.log('🟢 Word count:', finalReply.split(' ').length);
@@ -678,12 +712,14 @@ POST ANALYSIS:
 ${contextHints}
 
 CRITICAL REQUIREMENTS:
-- EXACTLY 1 sentence only (maximum 25 words)
-- No introductory phrases like "Great post!" 
+- 1-2 impactful sentences (maximum 40 words total)
+- No introductory phrases like "Great post!"
 - Add genuine value or ask a thoughtful question
 - Be conversational and engaging
+- DO NOT include any preambles like "Here's a reply:" or explanations
+- Start your response immediately with the actual content
 
-Your reply (1 sentence only):`;
+Write your reply directly (no preambles):`;
 
     const messages: ChatCompletionMessageParam[] = [
       { role: "system", content: systemPrompt },
@@ -696,10 +732,10 @@ Your reply (1 sentence only):`;
     const completion = await engine.chat.completions.create({
       stream: true,
       messages: messages,
-      max_tokens: 40, // Drastically reduced for 1 sentence only
+      max_tokens: 80, // Increased for better quality (1-2 sentences)
       temperature: 0.7,
       top_p: 0.9,
-      stop: ["\n", ".", "!", "?"] // Stop at first sentence ending
+      stop: ["\n\n", "\n\n\n"] // Only stop on double newlines
     });
 
     for await (const chunk of completion) {
@@ -709,11 +745,43 @@ Your reply (1 sentence only):`;
       }
     }
 
-    const cleanedReply = reply.trim();
-    
-    // Ensure it's really just one sentence
+    // Remove common preambles and meta-text
+    const cleanReply = (text: string): string => {
+      // Remove common preambles
+      const preamblePatterns = [
+        /^Here'?s? (?:a |the |your |my )?(?:professional |rewritten |revised |improved )?(?:LinkedIn |response|reply|version|comment).*?:\s*/i,
+        /^This (?:is |would be |could be )?(?:a |the |your |my )?(?:LinkedIn |response|reply).*?:\s*/i,
+        /^(?:Sure|Certainly|Absolutely)[,!]?\s*(?:here'?s?|this is).*?:\s*/i,
+        /^I'?(?:ve|ll|d)? (?:rewritten|revised|created|generated|made).*?:\s*/i,
+        /^(?:Response|Reply|Comment|Answer):\s*/i,
+        /^Here you go:\s*/i,
+        /^.*?(?:meets?|meeting|fulfill?s?) (?:the |your )?requirements?.*?:\s*/i,
+      ];
+
+      let cleaned = text.trim();
+      for (const pattern of preamblePatterns) {
+        cleaned = cleaned.replace(pattern, '');
+      }
+
+      // Also remove any lines that are just meta-commentary
+      const lines = cleaned.split('\n');
+      const contentLines = lines.filter(line => {
+        const lower = line.toLowerCase().trim();
+        return !lower.startsWith('here') &&
+               !lower.includes('rewritten') &&
+               !lower.includes('requirements') &&
+               !lower.includes('professional linkedin');
+      });
+
+      return contentLines.join(' ').trim();
+    };
+
+    const cleanedReply = cleanReply(reply);
+
+    // Limit to 1-2 sentences for quality
     const sentences = cleanedReply.split(/[.!?]+/).filter(s => s.trim().length > 0);
-    const finalReply = sentences[0].trim() + (cleanedReply.includes('?') ? '?' : '.');
+    const maxSentences = sentences.slice(0, 2).join('. ');
+    const finalReply = maxSentences.trim() + (cleanedReply.endsWith('?') ? '' : '.');
     
     console.log('🟢 STEP 5G: Generation complete:', finalReply);
     console.log('🟢 Word count:', finalReply.split(' ').length);
