@@ -14,9 +14,9 @@ const RECOMMENDED_MODELS = [
 
 // Smart model selection for background service
 function getOptimalBackgroundModel(): string {
-  // For background service, prioritize reliability and moderate resource usage
-  // Start with fastest model for quick initialization, can upgrade later
-  return "Qwen2.5-0.5B-Instruct-q4f16_1-MLC"; // Fastest model for initial load
+  // BALANCED: Good quality with reliable browser compatibility
+  // 1B model provides excellent results without performance issues
+  return "Llama-3.2-1B-Instruct-q4f16_1-MLC"; // Optimal balance for LinkedIn
 }
 
 // Keep track of the AI engine using optimized loader
@@ -106,6 +106,25 @@ async function getUserPrompt(type: 'withComments' | 'standard'): Promise<string>
   }
 }
 
+// Track cached models in memory
+const cachedModels = new Set<string>();
+
+// Check if model is cached
+async function checkModelCacheStatus(modelId: string): Promise<boolean> {
+  try {
+    // Check Chrome storage for cache status
+    const result = await chrome.storage.local.get([`model-${modelId}-cached`]);
+    const isCached = result[`model-${modelId}-cached`] === 'true';
+    if (isCached) {
+      cachedModels.add(modelId);
+    }
+    return isCached || cachedModels.has(modelId);
+  } catch {
+    // Fallback to memory cache
+    return cachedModels.has(modelId);
+  }
+}
+
 // Initialize engine on first use with optimized loader
 async function ensureEngine(): Promise<MLCEngineInterface> {
   if (engine && engineInitialized) {
@@ -135,13 +154,60 @@ async function ensureEngine(): Promise<MLCEngineInterface> {
     // Check network connectivity first (but don't fail if it doesn't work)
     await checkNetworkConnectivity();
 
-    // Get optimal model based on system resources
-    const optimalModel = await modelLoader.getOptimalModel();
-    currentModel = optimalModel;
+    // Use BALANCED model for LinkedIn professional replies
+    // 1B model: Excellent quality with stable performance
+    currentModel = getOptimalBackgroundModel(); // Use 1B model
+    console.log('⚖️ Using optimal model for LinkedIn:', currentModel);
+
+    // Track if this is first load
+    const isFirstLoad = !(await checkModelCacheStatus(currentModel));
+
+    // Send initial loading message
+    sendProgressToAllTabs({
+      type: 'modelLoadProgress',
+      progress: 0,
+      message: isFirstLoad
+        ? '🚀 First-time setup: Downloading AI model (~50-200MB)...'
+        : '⚡ Loading model from cache...',
+      stage: 'initializing',
+      isFirstLoad
+    });
 
     // Use optimized loader with progress tracking
     engine = await modelLoader.loadModel(currentModel, (state) => {
-      console.log(`🔄 ${state.progressText} (${Math.round(state.progress * 100)}%)`);
+      const progress = Math.round(state.progress * 100);
+      console.log(`🔄 ${state.progressText} (${progress}%)`);
+
+      // Send detailed progress updates
+      let message = state.progressText;
+      let stage = 'downloading';
+
+      if (progress < 20) {
+        stage = 'initializing';
+        message = isFirstLoad
+          ? `📥 Downloading model... ${progress}% (This may take 1-3 minutes on first load)`
+          : `⚡ Loading from cache... ${progress}%`;
+      } else if (progress < 50) {
+        stage = 'downloading';
+        message = isFirstLoad
+          ? `📥 Downloading model files... ${progress}% (One-time download)`
+          : `🔄 Loading model weights... ${progress}%`;
+      } else if (progress < 80) {
+        stage = 'loading';
+        message = `🔧 Initializing AI engine... ${progress}%`;
+      } else {
+        stage = 'finalizing';
+        message = `✨ Almost ready... ${progress}%`;
+      }
+
+      // Broadcast progress to all tabs
+      sendProgressToAllTabs({
+        type: 'modelLoadProgress',
+        progress: progress,
+        message: message,
+        stage: stage,
+        isFirstLoad: isFirstLoad
+      });
     }, {
       maxRetries: 3,
       timeoutMs: 120000,
@@ -150,6 +216,22 @@ async function ensureEngine(): Promise<MLCEngineInterface> {
 
     engineInitialized = true;
     engineInitializing = false;
+
+    // Mark model as cached in memory and Chrome storage
+    cachedModels.add(currentModel);
+    chrome.storage.local.set({ [`model-${currentModel}-cached`]: 'true' }).catch(() => {
+      // Ignore storage errors
+    });
+
+    // Send completion message
+    sendProgressToAllTabs({
+      type: 'modelLoadProgress',
+      progress: 100,
+      message: '✅ AI model ready!',
+      stage: 'complete',
+      isFirstLoad: false
+    });
+
     console.log('✅ Background AI engine ready with optimized loader!');
     return engine;
   } catch (error) {
@@ -245,6 +327,26 @@ async function performHealthCheck(): Promise<boolean> {
   }
 }
 
+// Helper function to send messages to all tabs
+function sendProgressToAllTabs(message: any) {
+  chrome.tabs.query({}, (tabs) => {
+    tabs.forEach(tab => {
+      if (tab.id) {
+        chrome.tabs.sendMessage(tab.id, message).catch(() => {
+          // Ignore errors for tabs that don't have content scripts
+        });
+      }
+    });
+  });
+
+  // Also try to send to popup if open
+  try {
+    chrome.runtime.sendMessage(message);
+  } catch (e) {
+    // Ignore if no listeners
+  }
+}
+
 // Message handler for LinkedIn reply generation
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log('🔵 STEP 4: Background received message:', request.action);
@@ -255,11 +357,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     ensureEngine()
       .then(() => {
         console.log('✅ AI engine pre-initialized for LinkedIn');
-        sendResponse({ engineReady: true });
+        sendResponse({ engineReady: true, currentModel: currentModel });
       })
       .catch(error => {
         console.error('❌ Failed to pre-initialize engine:', error);
-        sendResponse({ engineReady: false, error: error.message });
+        sendResponse({ engineReady: false, error: error.message, currentModel: currentModel });
       });
     return true; // Keep channel open for async response
   }
@@ -283,12 +385,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
   
   if (request.action === 'checkEngineStatus') {
-    performHealthCheck().then(isHealthy => {
+    performHealthCheck().then(async isHealthy => {
+      // Check if model is cached
+      const isCached = await checkModelCacheStatus(currentModel);
+
       sendResponse({
         engineReady: engineInitialized && isHealthy,
         initializing: engineInitializing,
         currentModel: currentModel,
-        healthy: isHealthy
+        healthy: isHealthy,
+        cached: isCached,
+        cacheMessage: isCached ? 'Model loaded from cache' : 'First-time download required'
       });
     });
     return true; // Keep channel open for async response
@@ -401,6 +508,31 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
   
+  if (request.action === 'updateModel') {
+    console.log('Model update requested:', request.model);
+    if (request.model && request.model !== currentModel) {
+      currentModel = request.model;
+      // Reset engine to force reload with new model
+      engine = null;
+      engineInitialized = false;
+      engineInitializing = false;
+    }
+    sendResponse({ success: true, currentModel: currentModel });
+    return false;
+  }
+
+  if (request.action === 'initializeModel') {
+    console.log('Manual model initialization requested');
+    ensureEngine()
+      .then(() => {
+        sendResponse({ success: true, message: 'Model initialized successfully', currentModel: currentModel });
+      })
+      .catch(error => {
+        sendResponse({ success: false, error: error.message, currentModel: currentModel });
+      });
+    return true;
+  }
+
   if (request.action === 'popupReady') {
     console.log('Popup is ready');
     return false;

@@ -312,9 +312,8 @@ export class OptimizedModelLoader {
       return 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC';
     } else if (availableMemory < 1024 * 1024 * 1024) {
       return 'Phi-3.5-mini-instruct-q4f16_1-MLC';
-    } else if (availableMemory < 2048 * 1024 * 1024) {
-      return 'gemma-2-2b-it-q4f16_1-MLC';
     } else {
+      // Optimal balanced model for stable performance
       return 'Llama-3.2-1B-Instruct-q4f16_1-MLC';
     }
   }

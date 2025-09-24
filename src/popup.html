@@ -15,98 +15,105 @@
         <img id="logo" src="icons/icon-32.png" width="32" height="32">
         <h1 class="brand">ReplyMate</h1>
       </header>
-      
-      <!-- Tab Navigation -->
-      <div class="tab-navigation">
-        <button class="tab-btn active" data-tab="chat">
-          <i class="fa fa-comments"></i>
-          <span>Chat</span>
-        </button>
-        <button class="tab-btn" data-tab="settings">
-          <i class="fa fa-cog"></i>
-          <span>Settings</span>
-        </button>
-      </div>
-      
-      <!-- Chat Tab Content -->
-      <div id="chat-tab" class="tab-content active">
-        <select id="model-selection" class="select"></select>
-        <div id="loadingBox">
-          <p id="init-label">Initializing model...</p>
-          <div id="loadingContainer"></div>
-        </div>
-        <p id="model-name"></p>
-        
-        <div class="input-container form-group">
-          <input
-            type="search"
-            id="query-input"
-            placeholder="What's on your mind?"
-          />
-          <button id="submit-button" class="btn">
-            <i class="fa fa-comments"></i>
-          </button>
-        </div>
 
-        <div class="stage">
-          <div id="loading-indicator" class="dot-flashing"></div>
-        </div>
-
-        <div id="answerWrapper">
-          <div id="answer"></div>
-          <div class="copyRow">
-            <span id="timestamp"></span>
-            <button
-              id="copyAnswer"
-              class="btn copyButton"
-              title="Copy the Answer to the Clipboard"
-            >
-              <i class="fa-solid fa-copy fa-lg"></i>
-            </button>
+      <!-- Model Status Bar - Always Visible -->
+      <div id="modelStatusBar" class="model-status-bar">
+        <div class="model-status-content">
+          <div class="status-icon" id="statusIcon">
+            <i class="fa fa-circle-notch fa-spin"></i>
+          </div>
+          <div class="status-text">
+            <span id="statusLabel">Checking AI model status...</span>
+            <span id="modelInfo" class="model-info"></span>
           </div>
         </div>
+        <div id="progressContainer" class="progress-container" style="display: none;">
+          <div class="progress-bar">
+            <div id="progressFill" class="progress-fill"></div>
+          </div>
+          <span id="progressText" class="progress-text">0%</span>
+        </div>
       </div>
-      
-      <!-- Settings Tab Content -->
-      <div id="settings-tab" class="tab-content">
+
+      <!-- Settings Content -->
+      <div id="settings-content" class="settings-main">
+        <!-- Model Selection Section -->
         <div class="settings-section">
-          <h3>AI Prompt Customization</h3>
+          <h3>
+            <i class="fa fa-robot"></i>
+            AI Model Configuration
+          </h3>
+          <p class="settings-description">Select your preferred AI model for LinkedIn replies</p>
+
+          <div class="model-selector-wrapper">
+            <select id="model-selection" class="select">
+              <option value="">Loading models...</option>
+            </select>
+            <div id="modelChangeStatus" class="model-change-status" style="display: none;">
+              <i class="fa fa-circle-notch fa-spin"></i>
+              <span>Switching model...</span>
+            </div>
+          </div>
+
+          <!-- Model Details -->
+          <div id="modelDetails" class="model-details" style="display: none;">
+            <div class="detail-item">
+              <i class="fa fa-check-circle" style="color: #28a745;"></i>
+              <span>Active Model: <strong id="currentModelName">-</strong></span>
+            </div>
+            <div class="detail-item">
+              <i class="fa fa-tachometer-alt"></i>
+              <span>Performance: <strong id="modelPerformance">-</strong></span>
+            </div>
+            <div class="detail-item">
+              <i class="fa fa-memory"></i>
+              <span>Memory: <strong id="memoryUsage">-</strong></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Prompts Section -->
+        <div class="settings-section">
+          <h3>
+            <i class="fa fa-edit"></i>
+            AI Prompt Customization
+          </h3>
           <p class="settings-description">Customize how the AI generates LinkedIn replies</p>
-          
+
           <div id="settingsLoading" class="settings-loading" style="display: none;">
             <div class="loading-spinner"></div>
-            <p>Loading settings...</p>
+            <p>Loading prompts...</p>
           </div>
-          
+
           <div id="settingsContent" class="settings-content">
             <div class="prompt-group">
               <label for="standardPrompt" class="prompt-label">
                 <i class="fa fa-comment"></i>
                 Standard Reply Prompt
               </label>
-              <textarea 
-                id="standardPrompt" 
+              <textarea
+                id="standardPrompt"
                 class="prompt-textarea"
                 rows="6"
-                placeholder="Loading...">
+                placeholder="Enter your custom prompt for standard replies...">
               </textarea>
               <small class="prompt-hint">Used for regular post replies</small>
             </div>
-            
+
             <div class="prompt-group">
               <label for="withCommentsPrompt" class="prompt-label">
                 <i class="fa fa-chart-line"></i>
                 Smart Reply Prompt
               </label>
-              <textarea 
-                id="withCommentsPrompt" 
+              <textarea
+                id="withCommentsPrompt"
                 class="prompt-textarea"
                 rows="6"
-                placeholder="Loading...">
+                placeholder="Enter your custom prompt for smart replies...">
               </textarea>
               <small class="prompt-hint">Used when analyzing top comments for engagement</small>
             </div>
-            
+
             <div class="settings-actions">
               <button id="savePrompts" class="btn btn-primary">
                 <i class="fa fa-save"></i>
@@ -121,9 +128,9 @@
                 Test Custom Prompts
               </button>
             </div>
-            
-            <div id="settingsStatus" class="status-message"></div>
-            
+
+            <div id="settingsStatus" class="status-message" style="display: none;"></div>
+
             <div class="settings-info">
               <h4>Reply Guidelines</h4>
               <ul class="guidelines-list">
@@ -133,6 +140,24 @@
                 <li><i class="fa fa-check text-success"></i> Avoids generic phrases like "Great post!"</li>
               </ul>
             </div>
+          </div>
+        </div>
+
+        <!-- Quick Actions Section -->
+        <div class="settings-section">
+          <h3>
+            <i class="fa fa-bolt"></i>
+            Quick Actions
+          </h3>
+          <div class="quick-actions">
+            <button id="checkStatus" class="btn btn-secondary">
+              <i class="fa fa-heartbeat"></i>
+              Check Model Status
+            </button>
+            <button id="reinitModel" class="btn btn-secondary">
+              <i class="fa fa-refresh"></i>
+              Reinitialize Model
+            </button>
           </div>
         </div>
       </div>

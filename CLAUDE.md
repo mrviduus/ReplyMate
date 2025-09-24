@@ -50,8 +50,7 @@ ReplyMate is a privacy-focused Chrome extension (Manifest V3) that provides AI-p
 3. **Popup Interface (src/popup.ts, popup.html)**
    - Main extension control panel
    - Model selection and management
-   - Direct AI chat interface
-   - Settings and customization
+   - Settings and customization for LinkedIn reply generation
 
 ### AI Configuration
 - **Library**: @mlc-ai/web-llm v0.2.79

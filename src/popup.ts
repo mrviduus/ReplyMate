@@ -1,835 +1,617 @@
-/* eslint-disable @typescript-eslint/no-non-null-assertion */
 "use strict";
 
-// This code is partially adapted from the openai-chatgpt-chrome-extension repo:
-// https://github.com/jessedi0n/openai-chatgpt-chrome-extension
-
 import "./popup.css";
-
-import {
-  MLCEngineInterface,
-  InitProgressReport,
-  CreateMLCEngine,
-  ChatCompletionMessageParam,
-  prebuiltAppConfig,
-} from "@mlc-ai/web-llm";
-import * as ProgressBar from "progressbar.js";
+import { prebuiltAppConfig } from "@mlc-ai/web-llm";
 
 // Model configuration for different use cases
 const MODEL_PROFILES = {
   'professional': {
-    // Best for LinkedIn professional responses
     models: ['Llama-3.2-3B-Instruct-q4f16_1-MLC', 'Llama-3.2-1B-Instruct-q4f16_1-MLC', 'gemma-2-2b-it-q4f16_1-MLC'],
-    description: 'Best quality for professional communication'
+    description: 'Highest quality (requires powerful device)',
+    performance: 'High Quality',
+    memory: 'High (200MB+)'
   },
   'balanced': {
-    // Good balance of speed and quality
     models: ['Llama-3.2-1B-Instruct-q4f16_1-MLC', 'Phi-3.5-mini-instruct-q4f16_1-MLC', 'gemma-2-2b-it-q4f16_1-MLC'],
-    description: 'Balanced speed and quality'
+    description: 'Optimal: Great quality + browser compatible',
+    performance: 'Excellent',
+    memory: 'Medium (100MB)'
   },
   'fast': {
-    // For quick responses on low-end devices
     models: ['Qwen2.5-0.5B-Instruct-q4f16_1-MLC', 'TinyLlama-1.1B-Chat-v1.0-q4f16_1-MLC', 'Qwen2-0.5B-Instruct-q4f16_1-MLC'],
-    description: 'Fastest responses for low-end devices'
+    description: 'Fastest responses for low-end devices',
+    performance: 'Fast',
+    memory: 'Low'
   }
 } as const;
 
 type ModelProfileKey = keyof typeof MODEL_PROFILES;
 
-// Smart model selection based on device capabilities
+// Model status states
+enum ModelStatus {
+  CHECKING = 'checking',
+  LOADING = 'loading',
+  READY = 'ready',
+  ERROR = 'error',
+  NOT_INITIALIZED = 'not_initialized'
+}
+
+// Loading stages for detailed progress
+interface LoadingProgress {
+  progress: number;
+  message: string;
+  stage: 'initializing' | 'downloading' | 'loading' | 'finalizing' | 'complete';
+  isFirstLoad: boolean;
+}
+
+// Get element by ID with type safety
+function getElementAndCheck(id: string): HTMLElement | null {
+  return document.getElementById(id);
+}
+
+// UI Elements - Model Status Bar
+const modelStatusBar = getElementAndCheck("modelStatusBar");
+const statusIcon = getElementAndCheck("statusIcon");
+const statusLabel = getElementAndCheck("statusLabel");
+const modelInfo = getElementAndCheck("modelInfo");
+const progressContainer = getElementAndCheck("progressContainer");
+const progressFill = getElementAndCheck("progressFill");
+const progressText = getElementAndCheck("progressText");
+
+// UI Elements - Model Configuration
+const modelSelector = getElementAndCheck("model-selection") as HTMLSelectElement;
+const modelChangeStatus = getElementAndCheck("modelChangeStatus");
+const modelDetails = getElementAndCheck("modelDetails");
+const currentModelName = getElementAndCheck("currentModelName");
+const modelPerformance = getElementAndCheck("modelPerformance");
+const memoryUsage = getElementAndCheck("memoryUsage");
+
+// UI Elements - Settings
+const settingsLoading = getElementAndCheck("settingsLoading");
+const settingsContent = getElementAndCheck("settingsContent");
+const standardPromptElement = getElementAndCheck("standardPrompt") as HTMLTextAreaElement;
+const withCommentsPromptElement = getElementAndCheck("withCommentsPrompt") as HTMLTextAreaElement;
+const savePromptsBtn = getElementAndCheck("savePrompts") as HTMLButtonElement;
+const resetPromptsBtn = getElementAndCheck("resetPrompts") as HTMLButtonElement;
+const testPromptsBtn = getElementAndCheck("testPrompts") as HTMLButtonElement;
+const settingsStatus = getElementAndCheck("settingsStatus");
+
+// Quick Actions
+const checkStatusBtn = getElementAndCheck("checkStatus") as HTMLButtonElement;
+const reinitModelBtn = getElementAndCheck("reinitModel") as HTMLButtonElement;
+
+// Model configuration
+let selectedModel = "";
+let actualActiveModel = ""; // The model actually running in background
+let currentProfile: ModelProfileKey = 'balanced';
+
+// Default prompts
+let defaultPrompts = {
+  standard: '',
+  withComments: ''
+};
+
+// Update model status UI
+function updateModelStatus(status: ModelStatus, message: string, details?: string) {
+  if (!modelStatusBar || !statusIcon || !statusLabel) return;
+
+  // Remove all status classes
+  modelStatusBar.className = 'model-status-bar';
+
+  // Update status bar color based on status
+  switch (status) {
+    case ModelStatus.CHECKING:
+      modelStatusBar.classList.add('loading');
+      statusIcon.innerHTML = '<i class="fa fa-circle-notch fa-spin"></i>';
+      break;
+    case ModelStatus.LOADING:
+      modelStatusBar.classList.add('loading');
+      statusIcon.innerHTML = '<i class="fa fa-download fa-pulse"></i>';
+      break;
+    case ModelStatus.READY:
+      modelStatusBar.classList.add('ready');
+      statusIcon.innerHTML = '<i class="fa fa-check-circle"></i>';
+      statusIcon.classList.add('pulse');
+      break;
+    case ModelStatus.ERROR:
+      modelStatusBar.classList.add('error');
+      statusIcon.innerHTML = '<i class="fa fa-exclamation-triangle"></i>';
+      break;
+    case ModelStatus.NOT_INITIALIZED:
+      statusIcon.innerHTML = '<i class="fa fa-info-circle"></i>';
+      break;
+  }
+
+  // Update text
+  statusLabel.textContent = message;
+  if (modelInfo && details) {
+    modelInfo.textContent = details;
+    modelInfo.style.display = 'block';
+  } else if (modelInfo) {
+    modelInfo.style.display = 'none';
+  }
+}
+
+// Update progress bar
+function updateProgress(progress: number, text?: string) {
+  if (progressContainer && progressFill && progressText) {
+    if (progress > 0) {
+      progressContainer.style.display = 'flex';
+      progressFill.style.width = `${Math.min(100, Math.max(0, progress))}%`;
+      progressText.textContent = text || `${Math.round(progress)}%`;
+    } else {
+      progressContainer.style.display = 'none';
+    }
+  }
+}
+
+// Show model details
+function showModelDetails(modelId: string, isActuallyActive: boolean = false) {
+  if (!modelDetails || !currentModelName || !modelPerformance || !memoryUsage) return;
+
+  modelDetails.style.display = 'block';
+
+  // Get readable name
+  const displayName = getModelDisplayName(modelId);
+  currentModelName.textContent = displayName;
+
+  // Update the actual active model if confirmed by background
+  if (isActuallyActive) {
+    actualActiveModel = modelId;
+  }
+
+  // Determine profile from model
+  let profile: ModelProfileKey = 'balanced';
+  for (const [key, config] of Object.entries(MODEL_PROFILES)) {
+    if ((config.models as readonly string[]).includes(modelId)) {
+      profile = key as ModelProfileKey;
+      break;
+    }
+  }
+
+  const profileConfig = MODEL_PROFILES[profile];
+  modelPerformance.textContent = profileConfig.performance;
+  memoryUsage.textContent = profileConfig.memory + ' Memory Usage';
+}
+
+// Smart model selection - BALANCED for reliable LinkedIn performance
 function getOptimalModel(): string {
   try {
-    // Check device capabilities
-    const memory = (performance as any).memory?.usedJSHeapSize || 0;
-    const availableMemory = (performance as any).memory?.jsHeapSizeLimit || 4_000_000_000;
-    
-    // Check if user is on mobile/tablet
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    
-    // Get available models from the current model list
     const availableModelIds = prebuiltAppConfig.model_list.map(m => m.model_id);
-    
-    let targetProfile: ModelProfileKey;
-    
-    if (isMobile || availableMemory < 4_000_000_000) {
-      targetProfile = 'fast';
-    } else if (availableMemory < 8_000_000_000) {
-      targetProfile = 'balanced';
-    } else {
-      targetProfile = 'professional';
-    }
-    
-    // Find the first available model from the target profile
-    for (const modelId of MODEL_PROFILES[targetProfile].models) {
+
+    // Prioritize balanced models: Quality with stable performance
+    const optimalModels = [
+      "Llama-3.2-1B-Instruct-q4f16_1-MLC",  // OPTIMAL: Best balance of quality and performance
+      "gemma-2-2b-it-q4f16_1-MLC",          // Good alternative
+      "Phi-3.5-mini-instruct-q4f16_1-MLC",  // Lightweight option
+      "Llama-3.2-3B-Instruct-q4f16_1-MLC",  // Heavy model (may have issues)
+      "Qwen2.5-0.5B-Instruct-q4f16_1-MLC"   // Ultra-light fallback
+    ];
+
+    // Return the first available balanced model
+    for (const modelId of optimalModels) {
       if (availableModelIds.includes(modelId)) {
-        console.log(`🤖 Selected optimal model: ${modelId} (${MODEL_PROFILES[targetProfile].description})`);
+        console.log('⚖️ Selected balanced model for LinkedIn:', modelId);
+        currentProfile = 'balanced';
         return modelId;
       }
     }
-    
-    // Fallback to Llama-3.2-1B if available, otherwise first available model
-    const fallback = availableModelIds.find(id => id.includes('Llama-3.2-1B')) || 
-                    availableModelIds.find(id => id.includes('Llama')) ||
-                    availableModelIds[0];
-    
-    console.log(`🤖 Using fallback model: ${fallback}`);
-    return fallback;
+
+    // Ultimate fallback
+    return availableModelIds[0] || "Llama-3.2-1B-Instruct-q4f16_1-MLC";
   } catch (error) {
-    console.warn('Error in model selection, using default:', error);
-    return "Llama-3.2-1B-Instruct-q4f16_1-MLC";
+    console.error('Error selecting optimal model:', error);
+    return "Llama-3.2-1B-Instruct-q4f16_1-MLC"; // Default to balanced
   }
 }
 
-// modified setLabel to not throw error
-function setLabel(id: string, text: string) {
-  const label = document.getElementById(id);
-  if (label != null) {
-    label.innerText = text;
-  }
-}
-
-function getElementAndCheck(id: string): HTMLElement {
-  const element = document.getElementById(id);
-  if (element == null) {
-    throw Error("Cannot find element " + id);
-  }
-  return element;
-}
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-const queryInput = getElementAndCheck("query-input")!;
-const submitButton = getElementAndCheck("submit-button")!;
-const modelName = getElementAndCheck("model-name");
-
-let context = "";
-let modelDisplayName = "";
-
-// throws runtime.lastError if you refresh extension AND try to access a webpage that is already open
-fetchPageContents();
-
-(<HTMLButtonElement>submitButton).disabled = true;
-
-let progressBar = new ProgressBar.Line("#loadingContainer", {
-  strokeWidth: 4,
-  easing: "easeInOut",
-  duration: 1400,
-  color: "#ffd166",
-  trailColor: "#eee",
-  trailWidth: 1,
-  svgStyle: { width: "100%", height: "100%" },
-});
-
-let isLoadingParams = true;
-
-let initProgressCallback = (report: InitProgressReport) => {
-  setLabel("init-label", report.text);
-  progressBar.animate(report.progress, {
-    duration: 50,
-  });
-  if (report.progress == 1.0) {
-    enableInputs();
-  }
-};
-
-// initially selected model - using smart selection for best performance
-let selectedModel = getOptimalModel();
-
-// populate model-selection
-const modelSelector = getElementAndCheck(
-  "model-selection",
-) as HTMLSelectElement;
-
-// Get all recommended models from profiles
-const recommendedModels: string[] = [
-  ...MODEL_PROFILES.professional.models,
-  ...MODEL_PROFILES.balanced.models,
-  ...MODEL_PROFILES.fast.models
-];
-
-// Filter and sort models: recommended first, then others
-const allModels = prebuiltAppConfig.model_list.slice();
-const sortedModels = allModels.sort((a, b) => {
-  const aRecommended = recommendedModels.includes(a.model_id);
-  const bRecommended = recommendedModels.includes(b.model_id);
-  
-  if (aRecommended && !bRecommended) return -1;
-  if (!aRecommended && bRecommended) return 1;
-  
-  // Among recommended models, prioritize Llama > Gemma > Phi > Qwen
-  const getModelPriority = (id: string) => {
-    if (id.includes('Llama-3.2')) return 1;
-    if (id.includes('gemma-2')) return 2;
-    if (id.includes('Phi-3.5')) return 3;
-    if (id.includes('Qwen2.5')) return 4;
-    return 5;
-  };
-  
-  return getModelPriority(a.model_id) - getModelPriority(b.model_id);
-});
-
-for (const model of sortedModels) {
-  const opt = document.createElement("option");
-  opt.value = model.model_id;
-  
-  // Add helpful descriptions for recommended models
-  let displayName = model.model_id;
-  if (recommendedModels.includes(model.model_id)) {
-    if (model.model_id.includes('Llama-3.2-3B')) {
-      displayName += " (Best Quality)";
-    } else if (model.model_id.includes('Llama-3.2-1B')) {
-      displayName += " (Recommended)";
-    } else if (model.model_id.includes('gemma-2')) {
-      displayName += " (Google)";
-    } else if (model.model_id.includes('Phi-3.5')) {
-      displayName += " (Microsoft)";
-    } else if (model.model_id.includes('Qwen2.5-0.5B')) {
-      displayName += " (Fastest)";
+// Extract display name from model ID
+function getModelDisplayName(modelId: string): string {
+  const parts = modelId.split('-');
+  const nameParts = [];
+  for (let i = 0; i < parts.length; i++) {
+    if (parts[i].includes('q4f16') || parts[i] === 'MLC') {
+      break;
     }
+    nameParts.push(parts[i]);
   }
-  
-  opt.innerHTML = displayName;
-  opt.selected = false;
-
-  // set initial selection as the initially selected model
-  if (model.model_id == selectedModel) {
-    opt.selected = true;
-  }
-
-  modelSelector.appendChild(opt);
+  return nameParts.join('-');
 }
 
-modelName.innerText = "Loading initial model...";
-// Remove direct engine initialization - will be done in DOMContentLoaded
-let engine: MLCEngineInterface;
+// Initialize model selector
+async function setupModelSelector() {
+  if (!modelSelector) return;
 
-let chatHistory: ChatCompletionMessageParam[] = [];
+  updateModelStatus(ModelStatus.CHECKING, "Loading model list...");
 
-function enableInputs() {
-  if (isLoadingParams) {
-    sleep(500);
-    isLoadingParams = false;
+  modelSelector.innerHTML = '';
+
+  // First check what model is actually active in background
+  await checkActualActiveModel();
+
+  // Use actual active model if available, otherwise fall back to stored or optimal
+  const { selectedModel: storedModel } = await chrome.storage.local.get('selectedModel');
+  if (!selectedModel) {
+    selectedModel = actualActiveModel || storedModel || getOptimalModel();
   }
 
-  // remove loading bar and loading bar descriptors, if exists
-  const initLabel = document.getElementById("init-label");
-  initLabel?.remove();
-  const loadingBarContainer = document.getElementById("loadingContainer")!;
-  loadingBarContainer?.remove();
-  queryInput.focus();
+  const appConfig = prebuiltAppConfig;
+  const availableModels = new Set(appConfig.model_list.map(m => m.model_id));
+  const addedModels = new Set<string>();
 
-  const modelNameArray = selectedModel.split("-");
-  modelDisplayName = modelNameArray[0];
-  let j = 1;
-  while (j < modelNameArray.length && modelNameArray[j][0] != "q") {
-    modelDisplayName = modelDisplayName + "-" + modelNameArray[j];
-    j++;
-  }
-}
+  Object.entries(MODEL_PROFILES).forEach(([profileName, profile]) => {
+    const optgroup = document.createElement('optgroup');
+    optgroup.label = `${profileName.charAt(0).toUpperCase() + profileName.slice(1)} - ${profile.description}`;
 
-let requestInProgress = false;
+    profile.models.forEach(modelId => {
+      if (availableModels.has(modelId) && !addedModels.has(modelId)) {
+        const option = document.createElement('option');
+        option.value = modelId;
+        option.text = getModelDisplayName(modelId);
+        if (modelId === selectedModel) {
+          option.selected = true;
+        }
+        optgroup.appendChild(option);
+        addedModels.add(modelId);
+      }
+    });
 
-// Disable submit button if input field is empty
-queryInput.addEventListener("keyup", () => {
-  if (
-    (<HTMLInputElement>queryInput).value === "" ||
-    requestInProgress ||
-    isLoadingParams
-  ) {
-    (<HTMLButtonElement>submitButton).disabled = true;
-  } else {
-    (<HTMLButtonElement>submitButton).disabled = false;
-  }
-});
-
-// If user presses enter, click submit button
-queryInput.addEventListener("keyup", (event) => {
-  if (event.code === "Enter") {
-    event.preventDefault();
-    submitButton.click();
-  }
-});
-
-// Listen for clicks on submit button
-async function handleClick() {
-  const popupEngine = (window as any).popupEngine;
-  if (!popupEngine) {
-    updateAnswer("Chat AI not ready. Please wait for initialization to complete.");
-    return;
-  }
-
-  requestInProgress = true;
-  (<HTMLButtonElement>submitButton).disabled = true;
-
-  // Get the message from the input field
-  const message = (<HTMLInputElement>queryInput).value;
-  console.log("message", message);
-  // Clear the answer
-  document.getElementById("answer")!.innerHTML = "";
-  // Hide the answer
-  document.getElementById("answerWrapper")!.style.display = "none";
-  // Show the loading indicator
-  document.getElementById("loading-indicator")!.style.display = "block";
-
-  // Generate response
-  let inp = message;
-  if (context.length > 0) {
-    inp =
-      "Use only the following context when answering the question at the end. Don't use any other knowledge.\n" +
-      context +
-      "\n\nQuestion: " +
-      message +
-      "\n\nHelpful Answer: ";
-  }
-  console.log("Input:", inp);
-  chatHistory.push({ role: "user", content: inp });
-
-  let curMessage = "";
-  const completion = await popupEngine.chat.completions.create({
-    stream: true,
-    messages: chatHistory,
-  });
-  for await (const chunk of completion) {
-    const curDelta = chunk.choices[0].delta.content;
-    if (curDelta) {
-      curMessage += curDelta;
+    if (optgroup.children.length > 0) {
+      modelSelector.appendChild(optgroup);
     }
-    updateAnswer(curMessage);
-  }
-  const response = await popupEngine.getMessage();
-  chatHistory.push({ role: "assistant", content: await popupEngine.getMessage() });
-  console.log("response", response);
+  });
 
-  requestInProgress = false;
-  (<HTMLButtonElement>submitButton).disabled = false;
+  // Don't show details yet - wait for actual status check
+  // updateModelStatus will be called by checkModelStatus()
 }
-submitButton.addEventListener("click", handleClick);
 
-// listen for changes in modelSelector
+// Handle model selection change
 async function handleSelectChange() {
-  if (isLoadingParams) {
-    return;
-  }
+  if (!modelSelector || !modelChangeStatus) return;
 
-  const popupEngine = (window as any).popupEngine;
-  if (!popupEngine) {
-    console.error('Popup engine not available');
-    return;
-  }
+  const newModel = modelSelector.value;
+  if (newModel === selectedModel) return;
 
-  modelName.innerText = "";
+  selectedModel = newModel;
+  await chrome.storage.local.set({ selectedModel });
 
-  const initLabel = document.createElement("p");
-  initLabel.id = "init-label";
-  initLabel.innerText = "Initializing model...";
-  const loadingContainer = document.createElement("div");
-  loadingContainer.id = "loadingContainer";
+  // Show loading indicator
+  modelChangeStatus.style.display = 'flex';
+  modelSelector.disabled = true;
 
-  const loadingBox = getElementAndCheck("loadingBox");
-  loadingBox.appendChild(initLabel);
-  loadingBox.appendChild(loadingContainer);
+  updateModelStatus(ModelStatus.LOADING, "Switching model...", `Loading ${getModelDisplayName(selectedModel)}`);
+  updateProgress(0, "Initializing...");
 
-  isLoadingParams = true;
-  (<HTMLButtonElement>submitButton).disabled = true;
+  // Notify background to load the new model
+  chrome.runtime.sendMessage({
+    action: 'updateModel',
+    model: selectedModel
+  }, (response) => {
+    modelChangeStatus.style.display = 'none';
+    modelSelector.disabled = false;
+    updateProgress(0);
 
-  if (requestInProgress) {
-    popupEngine.interruptGenerate();
-  }
-  popupEngine.resetChat();
-  chatHistory = [];
-  await popupEngine.unload();
-
-  selectedModel = modelSelector.value;
-
-  progressBar = new ProgressBar.Line("#loadingContainer", {
-    strokeWidth: 4,
-    easing: "easeInOut",
-    duration: 1400,
-    color: "#ffd166",
-    trailColor: "#eee",
-    trailWidth: 1,
-    svgStyle: { width: "100%", height: "100%" },
-  });
-
-  initProgressCallback = (report: InitProgressReport) => {
-    setLabel("init-label", report.text);
-    progressBar.animate(report.progress, {
-      duration: 50,
-    });
-    if (report.progress == 1.0) {
-      enableInputs();
-    }
-  };
-
-  popupEngine.setInitProgressCallback(initProgressCallback);
-
-  requestInProgress = true;
-  modelName.innerText = "Reloading with new model...";
-  await popupEngine.reload(selectedModel);
-  requestInProgress = false;
-  modelName.innerText = "Now chatting with " + modelDisplayName;
-}
-modelSelector.addEventListener("change", handleSelectChange);
-
-// Listen for messages from the background script and LinkedIn content script
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.answer) {
-    updateAnswer(request.answer);
-  }
-  
-  if (request.action === 'generateLinkedInReply') {
-    // Forward to background service worker which handles AI generation
-    chrome.runtime.sendMessage({
-      action: 'generateLinkedInReply',
-      postContent: request.postContent
-    }, (response) => {
-      sendResponse(response);
-    });
-    return true; // Keep channel open for async response
-  }
-});
-
-// Check and display background engine status on popup load
-document.addEventListener('DOMContentLoaded', async () => {
-  // Initialize tab functionality
-  initializeTabs();
-  
-  // Initialize settings functionality
-  await initializeSettings();
-
-  // Check if background engine is available
-  chrome.runtime.sendMessage({ action: 'checkEngineStatus' }, (response) => {
-    if (response?.engineReady) {
-      // Background AI is ready, we can use it for both chat and LinkedIn
-      console.log('Background AI engine is ready');
-    } else if (response?.initializing) {
-      console.log('Background AI engine is initializing...');
-      setLabel("model-name", "AI is initializing in background...");
+    if (response?.success) {
+      actualActiveModel = selectedModel;
+      showModelDetails(selectedModel, true);
+      updateModelStatus(ModelStatus.READY, "✅ Model switched successfully", `Active: ${getModelDisplayName(selectedModel)}`);
     } else {
-      console.log('Background AI engine not ready, will use popup AI for chat');
+      // Revert selection on failure
+      modelSelector.value = actualActiveModel || selectedModel;
+      updateModelStatus(ModelStatus.ERROR, "Failed to switch model", "Please try again");
     }
   });
-  
-  // Initialize popup AI engine for chat functionality
-  await initializePopupEngine();
-  
-  // Add keyboard shortcuts for closing popup
-  document.addEventListener('keydown', (e) => {
-    // Close on Escape key
-    if (e.key === 'Escape') {
-      console.log('Closing popup with Escape key...');
-      window.close();
+}
+
+// Check what model is actually active in background
+async function checkActualActiveModel(): Promise<void> {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({ action: 'checkEngineStatus' }, async (response) => {
+      if (!chrome.runtime.lastError && response?.currentModel) {
+        actualActiveModel = response.currentModel;
+
+        // Update selector to match actual model
+        if (modelSelector && actualActiveModel) {
+          modelSelector.value = actualActiveModel;
+          selectedModel = actualActiveModel;
+          await chrome.storage.local.set({ selectedModel: actualActiveModel });
+        }
+      }
+      resolve();
+    });
+  });
+}
+
+// Check model status
+async function checkModelStatus() {
+  updateModelStatus(ModelStatus.CHECKING, "Checking model status...");
+  updateProgress(5, "Connecting...");
+
+  chrome.runtime.sendMessage({ action: 'checkEngineStatus' }, (response) => {
+    if (chrome.runtime.lastError) {
+      updateModelStatus(ModelStatus.ERROR, "Extension error", chrome.runtime.lastError.message);
+      updateProgress(0);
+      return;
     }
-    
-    // Close on Ctrl/Cmd + W
-    if ((e.ctrlKey || e.metaKey) && e.key === 'w') {
-      e.preventDefault();
-      console.log('Closing popup with Ctrl/Cmd+W...');
-      window.close();
+
+    if (response?.engineReady) {
+      // Use the actual model from background
+      const activeModel = response.currentModel || selectedModel;
+      actualActiveModel = activeModel;
+
+      // Update selector to match
+      if (modelSelector && activeModel !== modelSelector.value) {
+        modelSelector.value = activeModel;
+        selectedModel = activeModel;
+      }
+
+      const modelName = getModelDisplayName(activeModel);
+      updateModelStatus(ModelStatus.READY, "✅ AI Model Ready", `Active: ${modelName} • ${response.cacheMessage || ''}`);
+      showModelDetails(activeModel, true);
+      updateProgress(100, "100%");
+      setTimeout(() => updateProgress(0), 1500);
+    } else if (response?.initializing) {
+      const cacheMsg = response?.cached
+        ? "Loading from cache (fast)"
+        : "First-time download (1-3 minutes)";
+      updateModelStatus(ModelStatus.LOADING, "Model initializing...", cacheMsg);
+      updateProgress(15, "Starting...");
+
+      // If not cached, show warning
+      if (!response?.cached) {
+        showStatus('⏱️ First-time setup: Downloading AI model (50-200MB). This only happens once!', 'info');
+      }
+    } else {
+      updateModelStatus(ModelStatus.NOT_INITIALIZED, "Model not initialized", "Click 'Reinitialize Model' to start");
+      updateProgress(0);
     }
   });
+}
+
+// Reinitialize model
+async function reinitializeModel() {
+  if (!reinitModelBtn) return;
+
+  reinitModelBtn.disabled = true;
+  updateModelStatus(ModelStatus.LOADING, "Starting model initialization...", "Checking cache status...");
+  updateProgress(0, "Preparing...");
+
+  // Request model initialization
+  chrome.runtime.sendMessage({
+    action: 'initializeModel'
+  }, (response) => {
+    reinitModelBtn.disabled = false;
+
+    if (response?.success) {
+      updateProgress(100, "Complete!");
+      // Re-check actual status after initialization
+      setTimeout(() => checkModelStatus(), 500);
+    } else {
+      updateProgress(0);
+      updateModelStatus(ModelStatus.ERROR, "Initialization failed", response?.error || "Please try again");
+    }
+  });
+}
+
+// Load settings from storage
+async function loadSettings() {
+  if (!settingsLoading || !settingsContent) return;
+
+  settingsLoading.style.display = 'block';
+  settingsContent.style.opacity = '0.5';
+
+  try {
+    chrome.runtime.sendMessage({ action: 'getPrompts' }, (response) => {
+      if (response) {
+        defaultPrompts = response.defaults || defaultPrompts;
+        const customPrompts = response.prompts || {};
+
+        if (standardPromptElement) {
+          standardPromptElement.value = customPrompts.standard || defaultPrompts.standard;
+        }
+        if (withCommentsPromptElement) {
+          withCommentsPromptElement.value = customPrompts.withComments || defaultPrompts.withComments;
+        }
+      }
+
+      settingsLoading.style.display = 'none';
+      settingsContent.style.opacity = '1';
+    });
+  } catch (error) {
+    console.error('Failed to load settings:', error);
+    settingsLoading.style.display = 'none';
+    settingsContent.style.opacity = '1';
+    showStatus('Failed to load settings', 'error');
+  }
+}
+
+// Save prompts to storage
+async function savePrompts() {
+  if (!standardPromptElement || !withCommentsPromptElement) return;
+
+  const standardPrompt = standardPromptElement.value.trim();
+  const withCommentsPrompt = withCommentsPromptElement.value.trim();
+
+  if (!standardPrompt && !withCommentsPrompt) {
+    showStatus('Please enter at least one prompt', 'error');
+    return;
+  }
+
+  savePromptsBtn.disabled = true;
+  resetPromptsBtn.disabled = true;
+  showStatus('Saving prompts...', 'info');
+
+  chrome.runtime.sendMessage({
+    action: 'savePrompts',
+    prompts: {
+      standard: standardPrompt,
+      withComments: withCommentsPrompt
+    }
+  }, (response) => {
+    savePromptsBtn.disabled = false;
+    resetPromptsBtn.disabled = false;
+
+    if (response?.success) {
+      showStatus('✅ Settings saved successfully!', 'success');
+    } else {
+      showStatus('Failed to save settings', 'error');
+    }
+  });
+}
+
+// Reset prompts to defaults
+async function resetPrompts() {
+  if (!confirm('Reset all prompts to default values?')) {
+    return;
+  }
+
+  chrome.runtime.sendMessage({ action: 'resetPrompts' }, (response) => {
+    if (response?.success) {
+      if (standardPromptElement) {
+        standardPromptElement.value = defaultPrompts.standard;
+      }
+      if (withCommentsPromptElement) {
+        withCommentsPromptElement.value = defaultPrompts.withComments;
+      }
+      showStatus('✅ Prompts reset to defaults', 'success');
+    } else {
+      showStatus('Failed to reset prompts', 'error');
+    }
+  });
+}
+
+// Test prompts
+async function testPrompts() {
+  if (!testPromptsBtn) return;
+
+  testPromptsBtn.disabled = true;
+  showStatus('Testing prompts...', 'info');
+
+  const standardPrompt = standardPromptElement?.value.trim() || '';
+  const withCommentsPrompt = withCommentsPromptElement?.value.trim() || '';
+
+  chrome.runtime.sendMessage({
+    action: 'savePrompts',
+    prompts: {
+      standard: standardPrompt,
+      withComments: withCommentsPrompt
+    }
+  }, (saveResponse) => {
+    if (saveResponse?.success) {
+      chrome.runtime.sendMessage({ action: 'verifyPrompts' }, (response) => {
+        testPromptsBtn.disabled = false;
+
+        if (response?.hasCustomPrompts) {
+          const statusMsg = `✅ Custom prompts active<br>` +
+                          `Standard: ${response.isUsingCustomStandard ? 'Custom' : 'Default'}<br>` +
+                          `Smart: ${response.isUsingCustomComments ? 'Custom' : 'Default'}`;
+          showStatus(statusMsg, 'success');
+        } else {
+          showStatus('Using default prompts', 'info');
+        }
+      });
+    } else {
+      testPromptsBtn.disabled = false;
+      showStatus('Failed to save prompts for testing', 'error');
+    }
+  });
+}
+
+// Show status message
+function showStatus(message: string, type: 'success' | 'error' | 'info') {
+  if (!settingsStatus) return;
+
+  settingsStatus.innerHTML = message;
+  settingsStatus.className = `status-message ${type}`;
+  settingsStatus.style.display = 'block';
+
+  // Longer display time for info messages
+  const displayTime = type === 'info' ? 5000 : 3000;
+
+  setTimeout(() => {
+    if (settingsStatus) {
+      settingsStatus.style.display = 'none';
+    }
+  }, displayTime);
+}
+
+// Initialize popup on DOM ready
+document.addEventListener("DOMContentLoaded", async () => {
+  console.log('🚀 ReplyMate popup opened - Enhanced UI');
+
+  // Initial status
+  updateModelStatus(ModelStatus.CHECKING, "Initializing ReplyMate...");
+
+  // Setup model selector first
+  await setupModelSelector();
+
+  // Load settings
+  await loadSettings();
+
+  // Check model status immediately to sync UI
+  checkModelStatus();
+
+  // Setup event handlers
+  if (modelSelector) {
+    modelSelector.addEventListener("change", handleSelectChange);
+  }
+
+  if (savePromptsBtn) {
+    savePromptsBtn.addEventListener('click', savePrompts);
+  }
+
+  if (resetPromptsBtn) {
+    resetPromptsBtn.addEventListener('click', resetPrompts);
+  }
+
+  if (testPromptsBtn) {
+    testPromptsBtn.addEventListener('click', testPrompts);
+  }
+
+  if (checkStatusBtn) {
+    checkStatusBtn.addEventListener('click', checkModelStatus);
+  }
+
+  if (reinitModelBtn) {
+    reinitModelBtn.addEventListener('click', reinitializeModel);
+  }
+
+  // Listen for progress updates from background
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.type === 'modelLoadProgress') {
+      handleProgressUpdate(message as LoadingProgress);
+    }
+  });
+
+  // Notify background that popup is open
+  chrome.runtime.sendMessage({ action: 'popupReady' });
+
+  // Auto-check status every 10 seconds while popup is open
+  setInterval(() => {
+    // Only auto-check if not in loading state
+    if (modelStatusBar && !modelStatusBar.classList.contains('loading')) {
+      checkModelStatus();
+    }
+  }, 10000);
 });
 
-// Initialize tab switching functionality
-function initializeTabs() {
-  const tabButtons = document.querySelectorAll('.tab-btn');
-  const tabContents = document.querySelectorAll('.tab-content');
-  
-  tabButtons.forEach(button => {
-    button.addEventListener('click', async () => {
-      const targetTab = button.getAttribute('data-tab');
-      
-      // Remove active class from all tabs and contents
-      tabButtons.forEach(btn => btn.classList.remove('active'));
-      tabContents.forEach(content => content.classList.remove('active'));
-      
-      // Add active class to clicked tab and corresponding content
-      button.classList.add('active');
-      document.getElementById(`${targetTab}-tab`)?.classList.add('active');
-      
-      // Load settings when switching to settings tab
-      if (targetTab === 'settings') {
-        const loadSettingsTab = (window as any).loadSettingsTab;
-        if (loadSettingsTab) {
-          await loadSettingsTab();
-        }
-      }
-    });
-  });
-}
+// Handle progress updates from background
+function handleProgressUpdate(update: LoadingProgress) {
+  const { progress, message, stage, isFirstLoad } = update;
 
-// Initialize settings functionality
-async function initializeSettings() {
-  const standardPromptTextarea = document.getElementById('standardPrompt') as HTMLTextAreaElement;
-  const withCommentsPromptTextarea = document.getElementById('withCommentsPrompt') as HTMLTextAreaElement;
-  const saveButton = document.getElementById('savePrompts');
-  const resetButton = document.getElementById('resetPrompts');
-  const testButton = document.getElementById('testPrompts');
-  const statusMessage = document.getElementById('settingsStatus');
-
-  // Load current prompts initially
-  await loadPrompts();
-
-  // Save prompts functionality
-  saveButton?.addEventListener('click', async () => {
-    const prompts = {
-      standard: standardPromptTextarea.value,
-      withComments: withCommentsPromptTextarea.value
-    };
-    
-    // Debug logging
-    console.log('🎛️ POPUP: Attempting to save prompts:', prompts);
-    console.log('📏 Standard prompt length:', prompts.standard.length);
-    console.log('📏 WithComments prompt length:', prompts.withComments.length);
-    
-    // Disable button during save
-    const saveBtn = saveButton as HTMLButtonElement;
-    const originalText = saveBtn.innerHTML;
-    saveBtn.disabled = true;
-    saveBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Saving...';
-    
-    try {
-      await savePrompts(prompts);
-      console.log('✅ POPUP: Save operation completed successfully');
-      showStatus('Settings saved successfully!', 'success');
-    } catch (error) {
-      console.error('❌ POPUP: Failed to save prompts:', error);
-      showStatus('Failed to save settings', 'error');
-    } finally {
-      // Re-enable button
-      saveBtn.disabled = false;
-      saveBtn.innerHTML = originalText;
-    }
-  });
-
-  // Reset prompts functionality
-  resetButton?.addEventListener('click', async () => {
-    if (confirm('Are you sure you want to reset to default prompts?')) {
-      // Disable button during reset
-      const resetBtn = resetButton as HTMLButtonElement;
-      const originalText = resetBtn.innerHTML;
-      resetBtn.disabled = true;
-      resetBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Resetting...';
-      
-      try {
-        await resetPrompts();
-        await loadPrompts();
-        showStatus('Reset to default prompts', 'success');
-      } catch (error) {
-        console.error('Failed to reset prompts:', error);
-        showStatus('Failed to reset settings', 'error');
-      } finally {
-        // Re-enable button
-        resetBtn.disabled = false;
-        resetBtn.innerHTML = originalText;
-      }
-    }
-  });
-
-  // Test prompts functionality
-  testButton?.addEventListener('click', async () => {
-    const testBtn = testButton as HTMLButtonElement;
-    const originalText = testBtn.innerHTML;
-    testBtn.disabled = true;
-    testBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Testing...';
-    
-    try {
-      // Test if prompts are properly stored and retrieved
-      console.log('🧪 Testing custom prompts...');
-      
-      // First, get current prompts from storage
-      const response = await sendMessageAsync({ action: 'getPrompts' });
-      console.log('📖 Test - Storage response:', response);
-      
-      const customPrompts = response.prompts || {};
-      const hasCustomStandard = !!customPrompts.standard;
-      const hasCustomComments = !!customPrompts.withComments;
-      
-      let testResult = '🧪 Test Results:\n';
-      testResult += hasCustomStandard ? '✅ Custom standard prompt found\n' : '❌ No custom standard prompt\n';
-      testResult += hasCustomComments ? '✅ Custom comments prompt found\n' : '❌ No custom comments prompt\n';
-      
-      if (hasCustomStandard || hasCustomComments) {
-        testResult += '\n🎯 Custom prompts are working!';
-        showStatus('Custom prompts test passed!', 'success');
-      } else {
-        testResult += '\n⚠️ No custom prompts found. Save some first!';
-        showStatus('No custom prompts to test', 'error');
-      }
-      
-      console.log(testResult);
-      
-      // Show detailed info
-      if (customPrompts.standard) {
-        console.log('📝 Custom standard preview:', customPrompts.standard.substring(0, 100) + '...');
-      }
-      if (customPrompts.withComments) {
-        console.log('📝 Custom comments preview:', customPrompts.withComments.substring(0, 100) + '...');
-      }
-      
-    } catch (error) {
-      console.error('❌ Test failed:', error);
-      showStatus('Test failed - check console', 'error');
-    } finally {
-      testBtn.disabled = false;
-      testBtn.innerHTML = originalText;
-    }
-  });
-
-  // Helper functions
-  async function loadPrompts() {
-    const settingsLoading = document.getElementById('settingsLoading');
-    const settingsContent = document.getElementById('settingsContent');
-    
-    try {
-      // Show loading state
-      if (settingsLoading) settingsLoading.style.display = 'flex';
-      if (settingsContent) settingsContent.style.opacity = '0.5';
-      
-      console.log('🔄 POPUP: Loading prompts from storage...');
-      const response = await sendMessageAsync({ action: 'getPrompts' });
-      console.log('📦 POPUP: Received response:', response);
-      
-      const prompts = response.prompts || {};
-      const defaults = response.defaults || {};
-      
-      // Set values and log what we're setting
-      const standardValue = prompts.standard || defaults.standard || '';
-      const commentsValue = prompts.withComments || defaults.withComments || '';
-      
-      console.log('🎯 POPUP: Setting standard prompt:', standardValue.substring(0, 100) + '...');
-      console.log('🎯 POPUP: Setting comments prompt:', commentsValue.substring(0, 100) + '...');
-      
-      standardPromptTextarea.value = standardValue;
-      withCommentsPromptTextarea.value = commentsValue;
-      
-      // Verify values were set
-      console.log('✅ POPUP: Standard textarea value length:', standardPromptTextarea.value.length);
-      console.log('✅ POPUP: Comments textarea value length:', withCommentsPromptTextarea.value.length);
-      
-      // Update placeholders to show they're loaded
-      standardPromptTextarea.placeholder = 'Enter your custom standard reply prompt...';
-      withCommentsPromptTextarea.placeholder = 'Enter your custom smart reply prompt...';
-      
-      // Add visual indicator for custom prompts
-      const standardLabel = document.querySelector('label[for="standardPrompt"]');
-      const commentsLabel = document.querySelector('label[for="withCommentsPrompt"]');
-      
-      if (prompts.standard && standardLabel) {
-        standardLabel.innerHTML = '<i class="fa fa-check-circle" style="color: #4caf50;"></i> Standard Reply Prompt (Custom Active)';
-        console.log('✅ POPUP: Using CUSTOM standard prompt');
-      } else if (standardLabel) {
-        standardLabel.innerHTML = '<i class="fa fa-comment"></i> Standard Reply Prompt (Default)';
-        console.log('ℹ️ POPUP: Using DEFAULT standard prompt');
-      }
-      
-      if (prompts.withComments && commentsLabel) {
-        commentsLabel.innerHTML = '<i class="fa fa-check-circle" style="color: #4caf50;"></i> Smart Reply Prompt (Custom Active)';
-        console.log('✅ POPUP: Using CUSTOM withComments prompt');
-      } else if (commentsLabel) {
-        commentsLabel.innerHTML = '<i class="fa fa-chart-line"></i> Smart Reply Prompt (Default)';
-        console.log('ℹ️ POPUP: Using DEFAULT withComments prompt');
-      }
-      
-    } catch (error) {
-      console.error('❌ POPUP: Failed to load prompts:', error);
-      showStatus('Failed to load settings', 'error');
-    } finally {
-      // Hide loading state
-      if (settingsLoading) settingsLoading.style.display = 'none';
-      if (settingsContent) settingsContent.style.opacity = '1';
-    }
+  // Update status based on stage
+  if (stage === 'complete') {
+    updateModelStatus(ModelStatus.READY, message, `Model cached for fast loading`);
+    updateProgress(100, "100%");
+    setTimeout(() => updateProgress(0), 2000);
+  } else {
+    updateModelStatus(ModelStatus.LOADING, message,
+      isFirstLoad ? "⏱️ One-time download • Future loads will be instant" : "⚡ Loading from cache");
+    updateProgress(progress, `${progress}%`);
   }
 
-  async function savePrompts(prompts: any) {
-    return await sendMessageAsync({ 
-      action: 'savePrompts', 
-      prompts: prompts 
-    });
+  // Show additional info for first load
+  if (isFirstLoad && progress === 0) {
+    showStatus('📥 First-time setup: The AI model needs to be downloaded once. After this, it will load instantly from cache!', 'info');
   }
-
-  async function resetPrompts() {
-    return await sendMessageAsync({ action: 'resetPrompts' });
-  }
-
-  // Show status message function
-  function showStatus(message: string, type: 'success' | 'error') {
-    if (statusMessage) {
-      statusMessage.textContent = message;
-      statusMessage.className = `status-message ${type}`;
-      
-      setTimeout(() => {
-        statusMessage.className = 'status-message';
-      }, 3000);
-    }
-  }
-
-  // Export loadPrompts for tab switching
-  (window as any).loadSettingsTab = loadPrompts;
-}
-
-// Helper function to promisify chrome.runtime.sendMessage
-function sendMessageAsync(message: any): Promise<any> {
-  return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage(message, (response) => {
-      if (chrome.runtime.lastError) {
-        reject(chrome.runtime.lastError);
-      } else if (response?.success !== undefined && !response.success) {
-        reject(new Error('Operation failed'));
-      } else {
-        resolve(response);
-      }
-    });
-  });
-}
-
-// Initialize the popup AI engine for chat functionality
-async function initializePopupEngine() {
-  try {
-    console.log('🚀 Initializing popup engine with model:', selectedModel);
-    modelName.innerText = "Loading chat model...";
-    
-    // Enhanced initialization with better error handling
-    const engine: MLCEngineInterface = await CreateMLCEngine(selectedModel, {
-      initProgressCallback: initProgressCallback,
-    });
-    
-    modelName.innerText = "Now chatting with " + modelDisplayName;
-    
-    // Store engine globally for chat functionality
-    (window as any).popupEngine = engine;
-    console.log('✅ Popup engine initialized successfully');
-    
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error('❌ Failed to initialize popup engine:', error);
-    
-    // Check if it's a cache-related error
-    if (errorMessage.includes('Cache') || errorMessage.includes('NetworkError')) {
-      console.log('🔄 Cache error detected, trying to clear cache and retry...');
-      
-      try {
-        // Try to clear the cache and retry
-        if ('caches' in window) {
-          const cacheNames = await caches.keys();
-          await Promise.all(cacheNames.map(name => caches.delete(name)));
-          console.log('🧹 Cache cleared successfully');
-        }
-        
-        // Wait a bit and retry with a smaller model
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Try with the fastest model as fallback
-        const fallbackModel = "Qwen2.5-0.5B-Instruct-q4f16_1-MLC";
-        if (selectedModel !== fallbackModel) {
-          console.log(`🔄 Retrying with fallback model: ${fallbackModel}`);
-          
-          const fallbackEngine: MLCEngineInterface = await CreateMLCEngine(fallbackModel, {
-            initProgressCallback: initProgressCallback,
-          });
-          
-          modelName.innerText = "Now chatting with Qwen2.5-0.5B (Fallback)";
-          (window as any).popupEngine = fallbackEngine;
-          console.log('✅ Popup engine initialized with fallback model');
-          return;
-        }
-      } catch (retryError) {
-        console.error('❌ Fallback initialization also failed:', retryError);
-      }
-    }
-    
-    // Show user-friendly error message
-    modelName.innerText = "Failed to load chat model - check connection";
-    
-    // Create a mock engine that shows helpful error messages
-    (window as any).popupEngine = {
-      chat: {
-        completions: {
-          create: async () => {
-            throw new Error("Chat model not available. Please check your internet connection and try refreshing the page.");
-          }
-        }
-      }
-    };
-  }
-}
-
-function updateAnswer(answer: string) {
-  // Show answer
-  document.getElementById("answerWrapper")!.style.display = "block";
-  const answerWithBreaks = answer.replace(/\n/g, "<br>");
-  document.getElementById("answer")!.innerHTML = answerWithBreaks;
-  
-  // Add event listener to copy button
-  const copyButton = document.getElementById("copyAnswer")!;
-  // Remove any existing event listeners
-  copyButton.replaceWith(copyButton.cloneNode(true));
-  const newCopyButton = document.getElementById("copyAnswer")!;
-  
-  newCopyButton.addEventListener("click", () => {
-    // Get the answer text
-    const answerText = answer;
-    // Copy the answer text to the clipboard
-    navigator.clipboard
-      .writeText(answerText)
-      .then(() => {
-        console.log("Answer text copied to clipboard");
-        // Show visual feedback
-        const icon = newCopyButton.querySelector("i")!;
-        icon.className = "fa-solid fa-check fa-lg";
-        setTimeout(() => {
-          icon.className = "fa-solid fa-copy fa-lg";
-        }, 2000);
-      })
-      .catch((err) => console.error("Could not copy text: ", err));
-  });
-
-  // Add close button if it doesn't exist
-  let closeButton = document.getElementById("closePopup");
-  if (!closeButton) {
-    closeButton = document.createElement("button");
-    closeButton.id = "closePopup";
-    closeButton.className = "btn closeButton";
-    closeButton.title = "Close popup";
-    closeButton.innerHTML = '<i class="fa-solid fa-times fa-lg"></i>';
-    
-    // Add the close button to the copyRow
-    const copyRow = document.querySelector(".copyRow")!;
-    copyRow.appendChild(closeButton);
-  }
-  
-  // Add event listener to close button
-  closeButton.replaceWith(closeButton.cloneNode(true));
-  const newCloseButton = document.getElementById("closePopup")!;
-  
-  newCloseButton.addEventListener("click", () => {
-    console.log("Closing popup...");
-    window.close();
-  });
-
-  const options: Intl.DateTimeFormatOptions = {
-    month: "short",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  };
-  const time = new Date().toLocaleString("en-US", options);
-  // Update timestamp
-  document.getElementById("timestamp")!.innerText = time;
-  // Hide loading indicator
-  document.getElementById("loading-indicator")!.style.display = "none";
-}
-
-function fetchPageContents() {
-  chrome.tabs.query({ currentWindow: true, active: true }, function (tabs) {
-    if (tabs[0]?.id !== undefined) {
-      const port = chrome.tabs.connect(tabs[0].id, { name: "channelName" });
-      port.postMessage({});
-      port.onMessage.addListener(function (msg) {
-        console.log("Page contents:", msg.contents);
-        context = msg.contents;
-      });
-    }
-  });
 }
