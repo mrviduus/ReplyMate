@@ -36,6 +36,23 @@ class LinkedInReplyMate {
     );
   }
 
+  private notifyBackgroundReady(): void {
+    console.log('\ud83d\udd14 Notifying background that LinkedIn content script is ready...');
+    chrome.runtime.sendMessage({
+      action: 'linkedinContentScriptReady'
+    }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.error('Failed to notify background:', chrome.runtime.lastError);
+        // Retry notification after a short delay
+        setTimeout(() => this.notifyBackgroundReady(), 2000);
+      } else if (response?.engineReady) {
+        console.log('\u2705 Background confirmed: AI engine is ready');
+      } else {
+        console.log('\u26a0\ufe0f Background response:', response);
+      }
+    });
+  }
+
   private init(): void {
     // Initialize when DOM is ready
     if (document.readyState === "loading") {
@@ -46,9 +63,12 @@ class LinkedInReplyMate {
   }
 
   private setup(): void {
+    // Notify background that LinkedIn content script is ready
+    this.notifyBackgroundReady();
+
     // Start observing for posts
     this.observePosts();
-    
+
     // Process existing posts
     this.processVisiblePosts();
 
@@ -340,20 +360,27 @@ class LinkedInReplyMate {
     // Check if we should use smart comment analysis
     const useSmartAnalysis = topComments.length >= 2; // Need at least 2 liked comments
 
-    // First check engine status with error handling
+    // First check engine status with error handling and auto-initialization
     try {
       chrome.runtime.sendMessage({
         action: 'checkEngineStatus'
       }, (statusResponse) => {
         if (chrome.runtime.lastError) {
           console.warn('Extension context issue:', chrome.runtime.lastError);
-          this.showToast('Extension needs to be reloaded. Please refresh the page.', 'error');
-          this.updateButtonState(postId, 'error');
+          // Try to re-initialize the connection
+          this.notifyBackgroundReady();
+          this.showToast('Reconnecting to AI engine...', 'error');
+          // Retry after a short delay
+          setTimeout(() => this.handleGenerateClick(postId), 2000);
           return;
         }
-        
-        if (statusResponse?.initializing) {
-          this.showToast('AI model is loading. This may take a few minutes on first use...', 'error');
+
+        if (!statusResponse?.engineReady) {
+          // Engine not ready, notify background to initialize
+          this.showToast('Initializing AI model. This may take a moment...', 'error');
+          this.notifyBackgroundReady();
+        } else if (statusResponse?.initializing) {
+          this.showToast('AI model is loading. Please wait...', 'error');
         }
       });
     } catch (error) {

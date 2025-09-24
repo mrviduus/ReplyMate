@@ -248,6 +248,21 @@ async function performHealthCheck(): Promise<boolean> {
 // Message handler for LinkedIn reply generation
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log('🔵 STEP 4: Background received message:', request.action);
+
+  // Pre-initialize engine when LinkedIn content script loads
+  if (request.action === 'linkedinContentScriptReady') {
+    console.log('🚀 LinkedIn detected, pre-initializing AI engine...');
+    ensureEngine()
+      .then(() => {
+        console.log('✅ AI engine pre-initialized for LinkedIn');
+        sendResponse({ engineReady: true });
+      })
+      .catch(error => {
+        console.error('❌ Failed to pre-initialize engine:', error);
+        sendResponse({ engineReady: false, error: error.message });
+      });
+    return true; // Keep channel open for async response
+  }
   
   if (request.action === 'generateLinkedInReply') {
     console.log('🔵 STEP 4A: Processing standard reply request');
@@ -601,5 +616,20 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'keep-alive') {
     // Just a keep-alive ping
     console.log('Keep-alive ping');
+    // Also perform health check periodically
+    if (engineInitialized) {
+      performHealthCheck();
+    }
+  }
+});
+
+// Listen for tab updates to detect LinkedIn navigation
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status === 'complete' && tab.url?.includes('linkedin.com')) {
+    console.log('🔍 LinkedIn tab detected, ensuring engine is ready...');
+    // Pre-initialize engine for LinkedIn tabs
+    ensureEngine().catch(error => {
+      console.error('Failed to pre-initialize for LinkedIn tab:', error);
+    });
   }
 });
