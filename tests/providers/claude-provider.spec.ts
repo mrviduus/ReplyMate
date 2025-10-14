@@ -1,22 +1,23 @@
 // Mock Anthropic SDK before imports
 jest.mock('@anthropic-ai/sdk', () => {
-  return {
-    default: jest.fn().mockImplementation((config) => ({
-      apiKey: config.apiKey,
-      messages: {
-        create: jest.fn().mockResolvedValue({
-          content: [{
-            type: 'text',
-            text: 'Mocked Claude reply'
-          }],
-          usage: {
-            input_tokens: 100,
-            output_tokens: 50
-          }
-        })
-      }
-    }))
-  };
+  const mockAnthropicClass = jest.fn().mockImplementation((config) => ({
+    apiKey: config.apiKey,
+    messages: {
+      create: jest.fn().mockResolvedValue({
+        content: [{
+          type: 'text',
+          text: 'Mocked Claude reply'
+        }],
+        usage: {
+          input_tokens: 100,
+          output_tokens: 50
+        }
+      })
+    }
+  }));
+
+  // Return the mock both as default and as a regular module export
+  return mockAnthropicClass;
 });
 
 import { ClaudeProvider } from '../../src/inference/providers/claude-provider';
@@ -70,7 +71,7 @@ describe('ClaudeProvider', () => {
     });
 
     it('should handle API verification errors', async () => {
-      const Anthropic = require('@anthropic-ai/sdk').default;
+      const Anthropic = require('@anthropic-ai/sdk');
       Anthropic.mockImplementationOnce(() => ({
         messages: {
           create: jest.fn().mockRejectedValue({ status: 401, message: 'Invalid API key' })
@@ -78,7 +79,7 @@ describe('ClaudeProvider', () => {
       }));
 
       provider = new ClaudeProvider({ apiKey: validApiKey });
-      await expect(provider.initialize()).rejects.toThrow('Invalid API key');
+      await expect(provider.initialize()).rejects.toThrow(ProviderError.INVALID_KEY);
     });
   });
 
@@ -130,16 +131,25 @@ describe('ClaudeProvider', () => {
     });
 
     it('should handle rate limiting', async () => {
-      const Anthropic = require('@anthropic-ai/sdk').default;
-      const mockCreate = jest.fn()
-        .mockRejectedValueOnce({ status: 429, message: 'Rate limit exceeded' })
-        .mockResolvedValueOnce({
-          content: [{ type: 'text', text: 'Retry successful' }],
-          usage: { input_tokens: 10, output_tokens: 5 }
-        });
+      const Anthropic = require('@anthropic-ai/sdk');
+      let callCount = 0;
 
       Anthropic.mockImplementationOnce(() => ({
-        messages: { create: mockCreate }
+        messages: {
+          create: jest.fn().mockImplementation(() => {
+            callCount++;
+            if (callCount === 1) {
+              // First call for verification succeeds
+              return Promise.resolve({
+                content: [{ type: 'text', text: 'Hi' }],
+                usage: { input_tokens: 10, output_tokens: 5 }
+              });
+            } else {
+              // Second call for actual generation fails with rate limit
+              return Promise.reject({ status: 429, message: 'Rate limit exceeded' });
+            }
+          })
+        }
       }));
 
       const rateLimitProvider = new ClaudeProvider({ apiKey: validApiKey });
@@ -151,10 +161,24 @@ describe('ClaudeProvider', () => {
     });
 
     it('should handle network errors', async () => {
-      const Anthropic = require('@anthropic-ai/sdk').default;
+      const Anthropic = require('@anthropic-ai/sdk');
+      let callCount = 0;
+
       Anthropic.mockImplementationOnce(() => ({
         messages: {
-          create: jest.fn().mockRejectedValue(new Error('Network error'))
+          create: jest.fn().mockImplementation(() => {
+            callCount++;
+            if (callCount === 1) {
+              // First call for verification succeeds
+              return Promise.resolve({
+                content: [{ type: 'text', text: 'Hi' }],
+                usage: { input_tokens: 10, output_tokens: 5 }
+              });
+            } else {
+              // Second call for actual generation fails with network error
+              return Promise.reject(new Error('Network error'));
+            }
+          })
         }
       }));
 
@@ -163,11 +187,11 @@ describe('ClaudeProvider', () => {
 
       await expect(
         errorProvider.generateReply('system', 'user')
-      ).rejects.toThrow('Network error');
+      ).rejects.toThrow(ProviderError.NETWORK_ERROR);
     });
 
     it('should handle unexpected response format', async () => {
-      const Anthropic = require('@anthropic-ai/sdk').default;
+      const Anthropic = require('@anthropic-ai/sdk');
       Anthropic.mockImplementationOnce(() => ({
         messages: {
           create: jest.fn().mockResolvedValue({
@@ -257,7 +281,7 @@ describe('ClaudeProvider', () => {
 
   describe('Configuration', () => {
     it('should respect maxTokens configuration', async () => {
-      const Anthropic = require('@anthropic-ai/sdk').default;
+      const Anthropic = require('@anthropic-ai/sdk');
       let capturedParams: any;
 
       Anthropic.mockImplementationOnce(() => ({
@@ -283,7 +307,7 @@ describe('ClaudeProvider', () => {
     });
 
     it('should respect temperature configuration', async () => {
-      const Anthropic = require('@anthropic-ai/sdk').default;
+      const Anthropic = require('@anthropic-ai/sdk');
       let capturedParams: any;
 
       Anthropic.mockImplementationOnce(() => ({
@@ -319,12 +343,26 @@ describe('ClaudeProvider', () => {
       ];
 
       for (const testCase of testCases) {
-        const Anthropic = require('@anthropic-ai/sdk').default;
+        const Anthropic = require('@anthropic-ai/sdk');
+        let callCount = 0;
+
         Anthropic.mockImplementationOnce(() => ({
           messages: {
-            create: jest.fn().mockRejectedValue({
-              status: testCase.status,
-              message: 'Error'
+            create: jest.fn().mockImplementation(() => {
+              callCount++;
+              if (callCount === 1) {
+                // First call for verification succeeds
+                return Promise.resolve({
+                  content: [{ type: 'text', text: 'Hi' }],
+                  usage: { input_tokens: 10, output_tokens: 5 }
+                });
+              } else {
+                // Second call for actual generation fails with specific error
+                return Promise.reject({
+                  status: testCase.status,
+                  message: 'Error'
+                });
+              }
             })
           }
         }));

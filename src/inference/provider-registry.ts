@@ -270,41 +270,55 @@ export class ProviderRegistry {
         this.register('claude', MockClaudeProvider as any);
       }
     } else if (type === 'gemini') {
-      // Will import GeminiProvider when implemented
-      class MockGeminiProvider implements InferenceProvider {
-        constructor(private config?: ProviderConfig) {}
-        async initialize(): Promise<void> {}
-        async generateReply(systemPrompt: string, userPrompt: string) {
-          return { reply: 'Gemini mock reply', provider: 'gemini', model: 'mock' };
+      // Import GeminiProvider
+      try {
+        const { GeminiProvider } = require('./providers/gemini-provider');
+        this.register('gemini', GeminiProvider);
+      } catch (error) {
+        console.warn('GeminiProvider not available:', error);
+        // Fall back to mock for testing
+        class MockGeminiProvider implements InferenceProvider {
+          constructor(private config?: ProviderConfig) {}
+          async initialize(): Promise<void> {}
+          async generateReply(systemPrompt: string, userPrompt: string) {
+            return { reply: 'Gemini mock reply', provider: 'gemini', model: 'mock' };
+          }
+          async validateApiKey(key: string): Promise<boolean> {
+            return key.startsWith('AIza');
+          }
+          isReady(): boolean { return true; }
+          getProviderName(): string { return 'Gemini API'; }
+          getModelName(): string { return 'gemini-1.5-flash'; }
+          getProviderType(): ProviderType { return 'gemini'; }
+          async dispose(): Promise<void> {}
         }
-        async validateApiKey(key: string): Promise<boolean> {
-          return key.startsWith('AIza');
-        }
-        isReady(): boolean { return true; }
-        getProviderName(): string { return 'Gemini API'; }
-        getModelName(): string { return 'gemini-1.5-flash'; }
-        getProviderType(): ProviderType { return 'gemini'; }
-        async dispose(): Promise<void> {}
+        this.register('gemini', MockGeminiProvider as any);
       }
-      this.register('gemini', MockGeminiProvider as any);
     } else if (type === 'openai') {
-      // Will import OpenAIProvider when implemented
-      class MockOpenAIProvider implements InferenceProvider {
-        constructor(private config?: ProviderConfig) {}
-        async initialize(): Promise<void> {}
-        async generateReply(systemPrompt: string, userPrompt: string) {
-          return { reply: 'OpenAI mock reply', provider: 'openai', model: 'mock' };
+      // Import OpenAIProvider
+      try {
+        const { OpenAIProvider } = require('./providers/openai-provider');
+        this.register('openai', OpenAIProvider);
+      } catch (error) {
+        console.warn('OpenAIProvider not available:', error);
+        // Fall back to mock for testing
+        class MockOpenAIProvider implements InferenceProvider {
+          constructor(private config?: ProviderConfig) {}
+          async initialize(): Promise<void> {}
+          async generateReply(systemPrompt: string, userPrompt: string) {
+            return { reply: 'OpenAI mock reply', provider: 'openai', model: 'mock' };
+          }
+          async validateApiKey(key: string): Promise<boolean> {
+            return key.startsWith('sk-') && key.length === 51;
+          }
+          isReady(): boolean { return true; }
+          getProviderName(): string { return 'OpenAI API'; }
+          getModelName(): string { return 'gpt-4o-mini'; }
+          getProviderType(): ProviderType { return 'openai'; }
+          async dispose(): Promise<void> {}
         }
-        async validateApiKey(key: string): Promise<boolean> {
-          return key.startsWith('sk-') && key.length === 51;
-        }
-        isReady(): boolean { return true; }
-        getProviderName(): string { return 'OpenAI API'; }
-        getModelName(): string { return 'gpt-4o-mini'; }
-        getProviderType(): ProviderType { return 'openai'; }
-        async dispose(): Promise<void> {}
+        this.register('openai', MockOpenAIProvider as any);
       }
-      this.register('openai', MockOpenAIProvider as any);
     }
   }
 
