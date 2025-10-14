@@ -37,8 +37,101 @@
 
       <!-- Settings Content -->
       <div id="settings-content" class="settings-main">
-        <!-- Model Selection Section -->
+        <!-- Provider Selection Section -->
         <div class="settings-section">
+          <h3>
+            <i class="fa fa-cloud"></i>
+            AI Provider Selection
+          </h3>
+          <p class="settings-description">Choose your AI provider for generating LinkedIn replies</p>
+
+          <div class="provider-selector-wrapper">
+            <select id="provider-selection" class="select">
+              <option value="local">Local AI (WebLLM) - No API Key Required</option>
+              <option value="claude">Claude AI - Requires API Key</option>
+              <option value="openai">OpenAI (ChatGPT) - Requires API Key</option>
+              <option value="gemini">Google Gemini - Requires API Key</option>
+            </select>
+          </div>
+
+          <!-- API Key Section (hidden by default) -->
+          <div id="apiKeySection" class="api-key-section" style="display: none;">
+            <div class="api-key-input-group">
+              <label for="apiKeyInput" class="api-key-label">
+                <i class="fa fa-key"></i>
+                <span id="apiKeyLabel">API Key</span>
+              </label>
+              <div class="api-key-input-wrapper">
+                <input
+                  type="password"
+                  id="apiKeyInput"
+                  class="api-key-input"
+                  placeholder="Enter your API key..."
+                />
+                <button id="toggleApiKeyVisibility" class="btn-icon" title="Show/Hide API Key">
+                  <i class="fa fa-eye"></i>
+                </button>
+              </div>
+              <small id="apiKeyHelp" class="api-key-help">
+                <i class="fa fa-info-circle"></i>
+                <span id="apiKeyHelpText">API key will be stored securely in your browser</span>
+              </small>
+              <div class="api-key-actions">
+                <button id="saveApiKey" class="btn btn-primary btn-sm">
+                  <i class="fa fa-save"></i>
+                  Save API Key
+                </button>
+                <button id="testApiKey" class="btn btn-secondary btn-sm">
+                  <i class="fa fa-check"></i>
+                  Test Connection
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Provider Info -->
+          <div id="providerInfo" class="provider-info">
+            <div class="info-card" id="webllmInfo">
+              <h4><i class="fa fa-laptop"></i> Local AI (WebLLM)</h4>
+              <ul>
+                <li>✅ 100% Privacy - Runs entirely on your device</li>
+                <li>✅ No API key or costs</li>
+                <li>⚡ Fast responses after initial model load</li>
+                <li>📦 Requires ~100-200MB storage</li>
+              </ul>
+            </div>
+            <div class="info-card" id="claudeInfo" style="display: none;">
+              <h4><i class="fa fa-brain"></i> Claude AI</h4>
+              <ul>
+                <li>🎯 Advanced reasoning and context understanding</li>
+                <li>💳 Requires Anthropic API key</li>
+                <li>🔗 <a href="https://console.anthropic.com/api" target="_blank">Get API Key</a></li>
+                <li>💰 Pay-per-use pricing</li>
+              </ul>
+            </div>
+            <div class="info-card" id="openaiInfo" style="display: none;">
+              <h4><i class="fa fa-robot"></i> OpenAI (ChatGPT)</h4>
+              <ul>
+                <li>🚀 GPT-4 and GPT-3.5 models available</li>
+                <li>💳 Requires OpenAI API key</li>
+                <li>🔗 <a href="https://platform.openai.com/api-keys" target="_blank">Get API Key</a></li>
+                <li>💰 Pay-per-token pricing</li>
+              </ul>
+            </div>
+            <div class="info-card" id="geminiInfo" style="display: none;">
+              <h4><i class="fa fa-gem"></i> Google Gemini</h4>
+              <ul>
+                <li>🌟 Google's latest AI models</li>
+                <li>💳 Requires Google AI API key</li>
+                <li>🔗 <a href="https://makersuite.google.com/app/apikey" target="_blank">Get API Key</a></li>
+                <li>🎁 Free tier available</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Model Selection Section (for WebLLM) -->
+        <div class="settings-section" id="modelSection">
           <h3>
             <i class="fa fa-robot"></i>
             AI Model Configuration

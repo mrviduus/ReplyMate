@@ -1,835 +1,417 @@
-import { MLCEngineInterface, ChatCompletionMessageParam } from "@mlc-ai/web-llm";
-import OptimizedModelLoader from './model-loader';
+/**
+ * Background Service Worker for ReplyMate
+ * Multi-Provider AI Integration
+ */
 
-console.log('Background service worker loaded');
+import { ProviderRegistry } from './inference/provider-registry';
+import { ProviderStorage } from './services/provider-storage';
+import type { InferenceProvider, ProviderType, InferenceResponse } from './inference/inference-provider';
 
-// Model configuration for optimal selection
-const RECOMMENDED_MODELS = [
-  "Llama-3.2-3B-Instruct-q4f16_1-MLC",
-  "Llama-3.2-1B-Instruct-q4f16_1-MLC", 
-  "gemma-2-2b-it-q4f16_1-MLC",
-  "Phi-3.5-mini-instruct-q4f16_1-MLC",
-  "Qwen2.5-0.5B-Instruct-q4f16_1-MLC",
-];
+console.log('🚀 ReplyMate Background Service Worker - Multi-Provider Edition');
 
-// Smart model selection for background service
-function getOptimalBackgroundModel(): string {
-  // BALANCED: Good quality with reliable browser compatibility
-  // 1B model provides excellent results without performance issues
-  return "Llama-3.2-1B-Instruct-q4f16_1-MLC"; // Optimal balance for LinkedIn
-}
+// Provider management
+let currentProvider: InferenceProvider | null = null;
+let currentProviderType: ProviderType = 'local';
+let providerInitializing = false;
+let providerInitialized = false;
 
-// Keep track of the AI engine using optimized loader
-const modelLoader = OptimizedModelLoader.getInstance();
-let engine: MLCEngineInterface | null = null;
-let engineInitialized = false;
-let engineInitializing = false;
-let currentModel = getOptimalBackgroundModel(); // Use fast model initially
-
-// Enhanced default prompts for better LinkedIn engagement
+// Default prompts for LinkedIn reply generation
 const DEFAULT_PROMPTS = {
-  withComments: `You are a LinkedIn engagement expert. Respond DIRECTLY with the reply text only - no preambles, no explanations.
+  standard: `You are an expert LinkedIn engagement specialist. Generate a brief, professional reply to this LinkedIn post.
 
-CRITICAL: Output 1-2 impactful sentences (maximum 40 words total). Start immediately with your response.
+CRITICAL REQUIREMENTS:
+- Maximum 1-2 sentences only
+- Be specific to the post content
+- Professional tone
+- Add value to the conversation
+- Natural and conversational
+- End with engagement (question/insight)
+- NO generic phrases like "Great post!" or "Thanks for sharing!"
+- NO excessive enthusiasm or emojis
 
-SMART ANALYSIS:
-- Study the top-performing comments' tone, style, and engagement patterns
-- Identify what makes them successful: specific insights, relatable experiences, thought-provoking questions, or timely perspectives
-- Notice if they use data, personal anecdotes, industry insights, or call-to-action phrases
+Post content: {POST_CONTENT}
 
-YOUR REPLY STRATEGY:
-- Match the energy level of top comments while adding your unique perspective
-- If top comments ask questions → ask a related but different question
-- If top comments share experiences → reference a contrasting or complementary experience  
-- If top comments provide insights → add supporting data or a fresh angle
-- Use power words that drive engagement: "Actually...", "Interestingly...", "What if...", "I've found..."
+Generate a brief, engaging reply (1-2 sentences max):`,
 
-ENGAGEMENT MULTIPLIERS:
-- End with a question when possible (drives responses)
-- Reference specific details from the original post
-- Use "we" language to create community feeling
-- Be conversational but professional`,
+  withComments: `You are an expert LinkedIn engagement specialist. Analyze this post and its top comments to generate a contextual reply.
 
-  standard: `You are a LinkedIn expert. Respond DIRECTLY with the reply text only - no preambles, no explanations.
+CRITICAL REQUIREMENTS:
+- Maximum 1-2 sentences only
+- Reference specific points from the post
+- Build on the discussion
+- Professional tone
+- Add unique value
+- Natural and conversational
+- NO generic phrases
+- NO excessive enthusiasm
 
-CRITICAL: Output 1-2 impactful sentences (maximum 40 words total). Start immediately with your response.
+Post content: {POST_CONTENT}
 
-HIGH-IMPACT REPLY FORMULA:
-1. Hook: Start with something attention-grabbing ("Actually...", "This reminds me...", "What's interesting...")
-2. Value: Add genuine insight, experience, or perspective
-3. Connection: End with a question or call-to-action when appropriate
+Top comments for context:
+{COMMENTS}
 
-PROVEN ENGAGEMENT PATTERNS:
-- Share a micro-insight: "I've seen this approach increase results by 40% in my experience."
-- Ask a strategic question: "What's been your biggest challenge implementing this strategy?"
-- Provide a contrasting view: "While I agree, I'd add that timing is equally crucial here."
-- Reference specific data/experience: "This aligns with the 70% increase we saw after..."
-
-PROFESSIONAL TONE GUIDE:
-- Confident but not arrogant
-- Helpful but not promotional  
-- Personal but not oversharing
-- Engaging but not casual
-
-AVOID:
-- Generic praise ("Great post!", "Thanks for sharing!")
-- Multiple sentences or explanations
-- Obvious statements everyone would agree with
-- Self-promotional content`
+Generate a brief, contextual reply that adds value (1-2 sentences max):`
 };
 
-// Get user's custom prompt or use default
-async function getUserPrompt(type: 'withComments' | 'standard'): Promise<string> {
-  console.log(`🔍 getUserPrompt called for type: ${type}`);
-  
-  try {
-    // Always check storage first
-    const result = await chrome.storage.sync.get(['customPrompts']);
-    console.log('📦 Storage result:', result);
-    
-    const customPrompts = result.customPrompts || {};
-    
-    // Check if custom prompt exists and is not empty
-    if (customPrompts[type] && customPrompts[type].trim().length > 0) {
-      console.log(`✅ Using CUSTOM prompt for ${type}`);
-      console.log(`📝 Custom prompt preview: ${customPrompts[type].substring(0, 150)}...`);
-      return customPrompts[type];
-    } else {
-      console.log(`⚠️ No custom prompt found for ${type}, using DEFAULT`);
-      console.log(`📝 Default prompt preview: ${DEFAULT_PROMPTS[type].substring(0, 150)}...`);
-      return DEFAULT_PROMPTS[type];
-    }
-  } catch (error) {
-    console.error('❌ Error getting user prompt:', error);
-    console.log('⚠️ Falling back to default prompt due to error');
-    return DEFAULT_PROMPTS[type];
-  }
-}
+// Custom prompts storage
+let customPrompts = {
+  standard: '',
+  withComments: ''
+};
 
-// Track cached models in memory
-const cachedModels = new Set<string>();
-
-// Check if model is cached
-async function checkModelCacheStatus(modelId: string): Promise<boolean> {
-  try {
-    // Check Chrome storage for cache status
-    const result = await chrome.storage.local.get([`model-${modelId}-cached`]);
-    const isCached = result[`model-${modelId}-cached`] === 'true';
-    if (isCached) {
-      cachedModels.add(modelId);
-    }
-    return isCached || cachedModels.has(modelId);
-  } catch {
-    // Fallback to memory cache
-    return cachedModels.has(modelId);
-  }
-}
-
-// Initialize engine on first use with optimized loader
-async function ensureEngine(): Promise<MLCEngineInterface> {
-  if (engine && engineInitialized) {
-    return engine;
+/**
+ * Initialize the selected provider
+ */
+async function initializeProvider(type?: ProviderType): Promise<boolean> {
+  if (providerInitializing) {
+    console.log('Provider initialization already in progress');
+    return false;
   }
 
-  if (engineInitializing) {
-    console.log('🔄 Engine already initializing, waiting...');
-    // Wait for initialization to complete with timeout
-    let attempts = 0;
-    while (engineInitializing && attempts < 60) { // 30 seconds max
-      await new Promise(resolve => setTimeout(resolve, 500));
-      attempts++;
-    }
-
-    if (engine && engineInitialized) {
-      return engine;
-    } else {
-      throw new Error('Engine initialization timed out or failed');
-    }
-  }
-
-  engineInitializing = true;
-  console.log(`🚀 Initializing background AI engine with optimized loader`);
+  providerInitializing = true;
+  providerInitialized = false;
 
   try {
-    // Check network connectivity first (but don't fail if it doesn't work)
-    await checkNetworkConnectivity();
+    // Get provider settings
+    const settings = await ProviderStorage.getSettings();
+    const providerType = type || (settings as any).provider || 'local';
 
-    // Use BALANCED model for LinkedIn professional replies
-    // 1B model: Excellent quality with stable performance
-    currentModel = getOptimalBackgroundModel(); // Use 1B model
-    console.log('⚖️ Using optimal model for LinkedIn:', currentModel);
+    console.log(`Initializing provider: ${providerType}`);
+    currentProviderType = providerType as ProviderType;
 
-    // Track if this is first load
-    const isFirstLoad = !(await checkModelCacheStatus(currentModel));
+    // Clean up existing provider
+    if (currentProvider) {
+      await currentProvider.dispose();
+      currentProvider = null;
+    }
 
-    // Send initial loading message
-    sendProgressToAllTabs({
-      type: 'modelLoadProgress',
-      progress: 0,
-      message: isFirstLoad
-        ? '🚀 First-time setup: Downloading AI model (~50-200MB)...'
-        : '⚡ Loading model from cache...',
-      stage: 'initializing',
-      isFirstLoad
+    // Create new provider instance using getProviderClass
+    const ProviderClass = ProviderRegistry.getProviderClass(providerType as ProviderType);
+
+    currentProvider = new ProviderClass({
+      model: (settings as any).model,
+      temperature: (settings as any).temperature || 0.7,
+      maxTokens: (settings as any).maxTokens || 150
     });
 
-    // Use optimized loader with progress tracking
-    engine = await modelLoader.loadModel(currentModel, (state) => {
-      const progress = Math.round(state.progress * 100);
-      console.log(`🔄 ${state.progressText} (${progress}%)`);
-
-      // Send detailed progress updates
-      let message = state.progressText;
-      let stage = 'downloading';
-
-      if (progress < 20) {
-        stage = 'initializing';
-        message = isFirstLoad
-          ? `📥 Downloading model... ${progress}% (This may take 1-3 minutes on first load)`
-          : `⚡ Loading from cache... ${progress}%`;
-      } else if (progress < 50) {
-        stage = 'downloading';
-        message = isFirstLoad
-          ? `📥 Downloading model files... ${progress}% (One-time download)`
-          : `🔄 Loading model weights... ${progress}%`;
-      } else if (progress < 80) {
-        stage = 'loading';
-        message = `🔧 Initializing AI engine... ${progress}%`;
-      } else {
-        stage = 'finalizing';
-        message = `✨ Almost ready... ${progress}%`;
+    // Initialize provider
+    if (providerType !== 'local') {
+      // External providers need API key
+      const apiKey = providerType === 'local' ? null : await ProviderStorage.getApiKey(providerType as 'claude' | 'openai' | 'gemini');
+      if (!apiKey) {
+        throw new Error(`API key required for ${providerType}`);
       }
 
-      // Broadcast progress to all tabs
-      sendProgressToAllTabs({
-        type: 'modelLoadProgress',
-        progress: progress,
-        message: message,
-        stage: stage,
-        isFirstLoad: isFirstLoad
-      });
-    }, {
-      maxRetries: 3,
-      timeoutMs: 120000,
-      preload: false
-    });
-
-    engineInitialized = true;
-    engineInitializing = false;
-
-    // Mark model as cached in memory and Chrome storage
-    cachedModels.add(currentModel);
-    chrome.storage.local.set({ [`model-${currentModel}-cached`]: 'true' }).catch(() => {
-      // Ignore storage errors
-    });
-
-    // Send completion message
-    sendProgressToAllTabs({
-      type: 'modelLoadProgress',
-      progress: 100,
-      message: '✅ AI model ready!',
-      stage: 'complete',
-      isFirstLoad: false
-    });
-
-    console.log('✅ Background AI engine ready with optimized loader!');
-    return engine;
-  } catch (error) {
-    engineInitializing = false;
-    engineInitialized = false;
-    console.error(`❌ Failed to initialize AI engine:`, error);
-
-    // If all fallbacks failed, provide detailed error
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    const detailedError = new Error(`Model initialization failed.
-      Last error: ${errorMessage}
-
-      Troubleshooting:
-      1. Check your internet connection
-      2. Try refreshing the page
-      3. Clear browser cache and try again
-      4. Disable other extensions temporarily`);
-
-    throw detailedError;
-  }
-}
-
-// Check network connectivity to CDN
-async function checkNetworkConnectivity(): Promise<void> {
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
-    
-    // Use a simpler endpoint that's more likely to work
-    const response = await fetch('https://huggingface.co/', {
-      method: 'HEAD',
-      signal: controller.signal
-    });
-    
-    clearTimeout(timeoutId);
-    
-    if (!response.ok) {
-      throw new Error(`CDN connectivity check failed: ${response.status}`);
+      // Set API key in provider config
+      (currentProvider as any).apiKey = apiKey;
     }
-    
-    console.log('✅ CDN connectivity verified');
+
+    await currentProvider!.initialize();
+    providerInitialized = true;
+
+    console.log(`✅ Provider ${providerType} initialized successfully`);
+    return true;
+
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    console.warn('⚠️ CDN connectivity issue detected:', errorMessage);
-    // Don't throw here - let the engine initialization handle the fallback
+    console.error('Failed to initialize provider:', error);
+    currentProvider = null;
+    providerInitialized = false;
+    throw error;
+  } finally {
+    providerInitializing = false;
   }
 }
 
-// Extension installation handler
-chrome.runtime.onInstalled.addListener((details) => {
-  console.log('Extension installed:', details.reason);
-  chrome.storage.local.set({ hasUsedExtension: true });
-  
-  // Reset initialization state on fresh install
-  if (details.reason === 'install') {
-    engineInitialized = false;
-    engineInitializing = false;
+/**
+ * Generate a reply using the current provider
+ */
+async function generateReply(systemPrompt: string, userPrompt: string): Promise<InferenceResponse> {
+  if (!currentProvider || !providerInitialized) {
+    // Try to initialize with default provider
+    await initializeProvider();
   }
-  
-  // Pre-initialize the engine after installation with error handling
-  if (details.reason === 'install' || details.reason === 'update') {
-    console.log('🚀 Pre-initializing engine after', details.reason);
-    ensureEngine().catch(error => {
-      console.error('Failed to pre-initialize engine:', error);
-      // Store the error for debugging
-      chrome.storage.local.set({ 
-        lastInitError: {
-          message: error.message,
-          timestamp: Date.now()
+
+  if (!currentProvider) {
+    throw new Error('No AI provider available');
+  }
+
+  try {
+    const response = await currentProvider.generateReply(systemPrompt, userPrompt);
+    return response;
+  } catch (error) {
+    console.error('Reply generation failed:', error);
+
+    // If local provider fails, we could try fallback to another provider
+    if (currentProviderType === 'local') {
+      console.log('Attempting to reinitialize local provider...');
+      await initializeProvider('local');
+
+      // Retry once
+      if (currentProvider) {
+        return await currentProvider.generateReply(systemPrompt, userPrompt);
+      }
+    }
+
+    throw error;
+  }
+}
+
+/**
+ * Message handler for popup and content scripts
+ */
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Handle async operations
+  (async () => {
+    try {
+      switch (message.action) {
+        // Provider management
+        case 'switchProvider': {
+          const success = await initializeProvider(message.provider);
+          sendResponse({ success, provider: currentProviderType });
+          break;
         }
+
+        case 'initializeProvider': {
+          const success = await initializeProvider(message.provider);
+          sendResponse({ success });
+          break;
+        }
+
+        case 'validateApiKey': {
+          try {
+            const ProviderClass = ProviderRegistry.getProviderClass(message.provider);
+            const provider = new ProviderClass({});
+            (provider as any).apiKey = message.apiKey;
+
+            // Try to validate by initializing
+            await provider.initialize();
+            await provider.dispose();
+
+            sendResponse({ valid: true });
+          } catch (error) {
+            sendResponse({
+              valid: false,
+              error: error instanceof Error ? error.message : 'Invalid API key'
+            });
+          }
+          break;
+        }
+
+        case 'testProvider': {
+          try {
+            const ProviderClass = ProviderRegistry.getProviderClass(message.provider);
+            const provider = new ProviderClass({});
+            if (message.apiKey) {
+              (provider as any).apiKey = message.apiKey;
+            }
+
+            await provider.initialize();
+            const response = await provider.generateReply(
+              'You are a helpful assistant.',
+              'Say "Hello! Connection successful!" in exactly those words.'
+            );
+            await provider.dispose();
+
+            sendResponse({
+              success: true,
+              model: provider.getModelName(),
+              response: response.reply
+            });
+          } catch (error) {
+            sendResponse({
+              success: false,
+              error: error instanceof Error ? error.message : 'Connection test failed'
+            });
+          }
+          break;
+        }
+
+        case 'checkEngineStatus': {
+          sendResponse({
+            engineReady: providerInitialized,
+            initializing: providerInitializing,
+            provider: currentProviderType,
+            currentModel: currentProvider?.getModelName() || '',
+            cached: currentProviderType === 'local' // Local provider uses caching
+          });
+          break;
+        }
+
+        // Reply generation
+        case 'generateReply': {
+          if (!providerInitialized) {
+            await initializeProvider();
+          }
+
+          const { postContent, comments, useSmartReply } = message;
+
+          // Select appropriate prompt
+          const promptTemplate = useSmartReply && comments?.length > 0
+            ? (customPrompts.withComments || DEFAULT_PROMPTS.withComments)
+            : (customPrompts.standard || DEFAULT_PROMPTS.standard);
+
+          // Prepare the prompt
+          let userPrompt = promptTemplate.replace('{POST_CONTENT}', postContent);
+
+          if (useSmartReply && comments?.length > 0) {
+            const topComments = comments.slice(0, 3)
+              .map((c: any, i: number) => `${i + 1}. ${c.text}`)
+              .join('\n');
+            userPrompt = userPrompt.replace('{COMMENTS}', topComments);
+          }
+
+          // System prompt for consistency
+          const systemPrompt = 'You are a professional LinkedIn user. Generate concise, engaging replies that add value to professional discussions. Keep responses to 1-2 sentences maximum.';
+
+          try {
+            const response = await generateReply(systemPrompt, userPrompt);
+
+            sendResponse({
+              success: true,
+              reply: response.reply,
+              provider: response.provider,
+              model: response.model,
+              latency: response.latency
+            });
+          } catch (error) {
+            console.error('Failed to generate reply:', error);
+            sendResponse({
+              success: false,
+              error: error instanceof Error ? error.message : 'Failed to generate reply'
+            });
+          }
+          break;
+        }
+
+        // Prompt management
+        case 'savePrompts': {
+          customPrompts = message.prompts || {};
+          await chrome.storage.local.set({ customPrompts });
+          sendResponse({ success: true });
+          break;
+        }
+
+        case 'getPrompts': {
+          const stored = await chrome.storage.local.get('customPrompts');
+          sendResponse({
+            prompts: stored.customPrompts || {},
+            defaults: DEFAULT_PROMPTS
+          });
+          break;
+        }
+
+        case 'resetPrompts': {
+          customPrompts = { standard: '', withComments: '' };
+          await chrome.storage.local.set({ customPrompts });
+          sendResponse({ success: true });
+          break;
+        }
+
+        case 'verifyPrompts': {
+          const hasCustom = !!(customPrompts.standard || customPrompts.withComments);
+          sendResponse({
+            hasCustomPrompts: hasCustom,
+            isUsingCustomStandard: !!customPrompts.standard,
+            isUsingCustomComments: !!customPrompts.withComments
+          });
+          break;
+        }
+
+        // Model management (Local provider specific)
+        case 'updateModel': {
+          if (currentProviderType === 'local' && message.model) {
+            await ProviderStorage.saveSettings({ models: [message.model] } as any);
+            await initializeProvider('local');
+            sendResponse({ success: true });
+          } else {
+            sendResponse({ success: false, error: 'Model update only available for WebLLM' });
+          }
+          break;
+        }
+
+        case 'getModelsInfo': {
+          if (currentProviderType === 'local') {
+            // Local provider model list handling
+            sendResponse({
+              models: [
+                { id: 'Llama-3.2-1B-Instruct-q4f16_1-MLC', name: 'Llama 3.2 1B' },
+                { id: 'gemma-2-2b-it-q4f16_1-MLC', name: 'Gemma 2 2B' },
+                { id: 'Phi-3.5-mini-instruct-q4f16_1-MLC', name: 'Phi 3.5 Mini' },
+                { id: 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC', name: 'Qwen 2.5 0.5B' }
+              ]
+            });
+          } else {
+            sendResponse({ models: [] });
+          }
+          break;
+        }
+
+        case 'popupReady': {
+          console.log('Popup opened, provider status:', {
+            type: currentProviderType,
+            initialized: providerInitialized
+          });
+          sendResponse({ success: true });
+          break;
+        }
+
+        default: {
+          console.warn('Unknown message action:', message.action);
+          sendResponse({ success: false, error: 'Unknown action' });
+        }
+      }
+    } catch (error) {
+      console.error('Message handler error:', error);
+      sendResponse({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
       });
-    });
+    }
+  })();
+
+  // Return true to indicate async response
+  return true;
+});
+
+// Initialize on startup
+chrome.runtime.onInstalled.addListener(async () => {
+  console.log('ReplyMate installed/updated - Initializing provider system');
+
+  // Load custom prompts
+  const stored = await chrome.storage.local.get('customPrompts');
+  if (stored.customPrompts) {
+    customPrompts = stored.customPrompts;
+  }
+
+  // Initialize default provider
+  try {
+    await initializeProvider();
+  } catch (error) {
+    console.error('Failed to initialize default provider on install:', error);
   }
 });
 
-// Add a health check function
-async function performHealthCheck(): Promise<boolean> {
+// Handle service worker activation
+chrome.runtime.onStartup.addListener(async () => {
+  console.log('ReplyMate service worker started');
+
+  // Load custom prompts
+  const stored = await chrome.storage.local.get('customPrompts');
+  if (stored.customPrompts) {
+    customPrompts = stored.customPrompts;
+  }
+
+  // Initialize default provider
   try {
-    if (!engineInitialized || !engine) {
-      console.log('🏥 Health check: Engine not ready');
-      return false;
-    }
-    
-    // Try a simple operation to verify engine is working
-    console.log('🏥 Health check: Engine appears healthy');
-    return true;
+    await initializeProvider();
   } catch (error) {
-    console.error('🏥 Health check failed:', error);
-    // Reset engine state to trigger re-initialization
-    engineInitialized = false;
-    engine = null;
-    return false;
-  }
-}
-
-// Helper function to send messages to all tabs
-function sendProgressToAllTabs(message: any) {
-  chrome.tabs.query({}, (tabs) => {
-    tabs.forEach(tab => {
-      if (tab.id) {
-        chrome.tabs.sendMessage(tab.id, message).catch(() => {
-          // Ignore errors for tabs that don't have content scripts
-        });
-      }
-    });
-  });
-
-  // Also try to send to popup if open
-  try {
-    chrome.runtime.sendMessage(message);
-  } catch (e) {
-    // Ignore if no listeners
-  }
-}
-
-// Message handler for LinkedIn reply generation
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  console.log('🔵 STEP 4: Background received message:', request.action);
-
-  // Pre-initialize engine when LinkedIn content script loads
-  if (request.action === 'linkedinContentScriptReady') {
-    console.log('🚀 LinkedIn detected, pre-initializing AI engine...');
-    ensureEngine()
-      .then(() => {
-        console.log('✅ AI engine pre-initialized for LinkedIn');
-        sendResponse({ engineReady: true, currentModel: currentModel });
-      })
-      .catch(error => {
-        console.error('❌ Failed to pre-initialize engine:', error);
-        sendResponse({ engineReady: false, error: error.message, currentModel: currentModel });
-      });
-    return true; // Keep channel open for async response
-  }
-  
-  if (request.action === 'generateLinkedInReply') {
-    console.log('🔵 STEP 4A: Processing standard reply request');
-    console.log('🔵 Post content received:', request.postContent?.substring(0, 100));
-    handleLinkedInReply(request.postContent, sendResponse);
-    return true; // Keep channel open for async response
-  }
-  
-  if (request.action === 'generateLinkedInReplyWithComments') {
-    console.log('🔵 STEP 4B: Processing smart reply request');
-    console.log('🔵 Comments received:', request.topComments?.length);
-    handleLinkedInReplyWithComments(
-      request.postContent, 
-      request.topComments,
-      sendResponse
-    );
-    return true; // Keep channel open for async response
-  }
-  
-  if (request.action === 'checkEngineStatus') {
-    performHealthCheck().then(async isHealthy => {
-      // Check if model is cached
-      const isCached = await checkModelCacheStatus(currentModel);
-
-      sendResponse({
-        engineReady: engineInitialized && isHealthy,
-        initializing: engineInitializing,
-        currentModel: currentModel,
-        healthy: isHealthy,
-        cached: isCached,
-        cacheMessage: isCached ? 'Model loaded from cache' : 'First-time download required'
-      });
-    });
-    return true; // Keep channel open for async response
-  }
-  
-  if (request.action === 'getPrompts') {
-    chrome.storage.sync.get(['customPrompts'], (result) => {
-      console.log('📖 getPrompts - Storage result:', result);
-      sendResponse({
-        prompts: result.customPrompts || {},
-        defaults: DEFAULT_PROMPTS
-      });
-    });
-    return true;
-  }
-  
-  if (request.action === 'savePrompts') {
-    console.log('💾 savePrompts - Saving prompts:', request.prompts);
-    
-    // Validate the prompts structure
-    if (!request.prompts || typeof request.prompts !== 'object') {
-      console.error('❌ savePrompts - Invalid prompts structure:', request.prompts);
-      sendResponse({ success: false, error: 'Invalid prompts structure' });
-      return true;
-    }
-    
-    // Ensure we have the required fields
-    const validatedPrompts = {
-      standard: request.prompts.standard || '',
-      withComments: request.prompts.withComments || ''
-    };
-    
-    console.log('✅ savePrompts - Validated prompts:', validatedPrompts);
-    
-    chrome.storage.sync.set({ customPrompts: validatedPrompts }, () => {
-      if (chrome.runtime.lastError) {
-        console.error('❌ savePrompts - Storage error:', chrome.runtime.lastError);
-        sendResponse({ success: false, error: chrome.runtime.lastError.message });
-        return;
-      }
-      
-      console.log('✅ savePrompts - Successfully saved to storage');
-      
-      // Verify save by reading back
-      chrome.storage.sync.get(['customPrompts'], (verifyResult) => {
-        console.log('🔍 savePrompts - Verification read:', verifyResult);
-        
-        if (verifyResult.customPrompts) {
-          console.log('🎯 Verified standard:', verifyResult.customPrompts.standard?.substring(0, 50) + '...');
-          console.log('🎯 Verified withComments:', verifyResult.customPrompts.withComments?.substring(0, 50) + '...');
-        }
-      });
-      
-      sendResponse({ success: true });
-    });
-    return true;
-  }
-  
-  if (request.action === 'resetPrompts') {
-    chrome.storage.sync.remove('customPrompts', () => {
-      sendResponse({ success: true });
-    });
-    return true;
-  }
-  
-  if (request.action === 'verifyPrompts') {
-    chrome.storage.sync.get(['customPrompts'], async (result) => {
-      const customPrompts = result.customPrompts || {};
-      const hasCustom = Object.keys(customPrompts).length > 0;
-      
-      console.log('🔍 VERIFICATION RESULTS:');
-      console.log('📦 Raw storage data:', result);
-      console.log('🎯 Custom prompts found:', hasCustom);
-      
-      if (hasCustom) {
-        console.log('📝 Standard prompt (first 100 chars):', customPrompts.standard?.substring(0, 100));
-        console.log('📝 Comments prompt (first 100 chars):', customPrompts.withComments?.substring(0, 100));
-      }
-      
-      // Test actual retrieval
-      const standardPrompt = await getUserPrompt('standard');
-      const withCommentsPrompt = await getUserPrompt('withComments');
-      
-      sendResponse({
-        hasCustomPrompts: hasCustom,
-        customPrompts: customPrompts,
-        retrievedStandard: standardPrompt.substring(0, 100),
-        retrievedComments: withCommentsPrompt.substring(0, 100),
-        isUsingCustomStandard: standardPrompt !== DEFAULT_PROMPTS.standard,
-        isUsingCustomComments: withCommentsPrompt !== DEFAULT_PROMPTS.withComments
-      });
-    });
-    return true;
-  }
-  
-  if (request.action === 'debugPrompts') {
-    (async () => {
-      const result = await chrome.storage.sync.get(['customPrompts']);
-      const standardPrompt = await getUserPrompt('standard');
-      const withCommentsPrompt = await getUserPrompt('withComments');
-      
-      sendResponse({
-        stored: result.customPrompts || {},
-        activeStandard: standardPrompt.substring(0, 200),
-        activeWithComments: withCommentsPrompt.substring(0, 200),
-        isCustomStandard: standardPrompt !== DEFAULT_PROMPTS.standard,
-        isCustomWithComments: withCommentsPrompt !== DEFAULT_PROMPTS.withComments
-      });
-    })();
-    return true;
-  }
-  
-  if (request.action === 'updateModel') {
-    console.log('Model update requested:', request.model);
-    if (request.model && request.model !== currentModel) {
-      currentModel = request.model;
-      // Reset engine to force reload with new model
-      engine = null;
-      engineInitialized = false;
-      engineInitializing = false;
-    }
-    sendResponse({ success: true, currentModel: currentModel });
-    return false;
-  }
-
-  if (request.action === 'initializeModel') {
-    console.log('Manual model initialization requested');
-    ensureEngine()
-      .then(() => {
-        sendResponse({ success: true, message: 'Model initialized successfully', currentModel: currentModel });
-      })
-      .catch(error => {
-        sendResponse({ success: false, error: error.message, currentModel: currentModel });
-      });
-    return true;
-  }
-
-  if (request.action === 'popupReady') {
-    console.log('Popup is ready');
-    return false;
-  }
-  
-  if (request.type === 'SUCCESS_REDIRECT') {
-    chrome.tabs.create({ url: 'https://www.linkedin.com/' });
-    return false;
+    console.error('Failed to initialize default provider on startup:', error);
   }
 });
-
-async function handleLinkedInReplyWithComments(
-  postContent: string, 
-  topComments: Array<{text: string, likeCount: number}>,
-  sendResponse: (response: any) => void
-) {
-  console.log('🟢 STEP 5: handleLinkedInReplyWithComments started');
-  
-  try {
-    console.log('🟢 STEP 5A: Ensuring engine...');
-    const engine = await ensureEngine();
-    console.log('🟢 STEP 5B: Engine ready');
-    
-    console.log('🟢 STEP 5C: Getting user prompt for withComments...');
-    
-    // ALWAYS get user's custom prompt or fall back to default
-    const systemPrompt = await getUserPrompt('withComments');
-    console.log('🟢 STEP 5D: Got prompt type:', systemPrompt === DEFAULT_PROMPTS.withComments ? 'DEFAULT' : 'CUSTOM');
-    console.log('📋 Using system prompt:', systemPrompt.substring(0, 100) + '...');
-
-    // Check storage directly here for debugging
-    const storageCheck = await chrome.storage.sync.get(['customPrompts']);
-    console.log('🟢 STEP 5E: Direct storage check:', storageCheck);
-
-    // Format top comments for context with more detail
-    const topCommentsContext = topComments.length > 0 
-      ? `\n\nTOP PERFORMING COMMENTS (study these patterns):\n${
-          topComments.slice(0, 5).map((c, i) => 
-            `Comment ${i + 1} (${c.likeCount} likes):\n"${c.text}"\nEngagement factor: ${
-              c.likeCount > 100 ? 'Viral' : 
-              c.likeCount > 50 ? 'High' : 
-              c.likeCount > 20 ? 'Medium' : 'Standard'
-            }\n`
-          ).join('\n')
-        }\nKEY PATTERN: Notice what makes these comments successful and apply similar strategies.`
-      : '\n\nNo high-engagement comments available. Focus on adding unique value and asking thoughtful questions.';
-
-    const userPrompt = `Generate a professional LinkedIn reply to this post:
-
-POST CONTENT:
-"${postContent}"
-${topCommentsContext}
-
-CRITICAL REQUIREMENTS:
-- 1-2 impactful sentences (maximum 40 words total)
-- No introductory phrases like "Great post!"
-- Add genuine value or ask a thoughtful question
-- Be conversational and engaging
-- DO NOT include any preambles like "Here's a reply:" or explanations
-- Start your response immediately with the actual content
-
-Write your reply directly (no preambles):`;
-
-    const messages: ChatCompletionMessageParam[] = [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt }
-    ];
-
-    console.log('🟢 STEP 5F: Starting AI generation...');
-    
-    let reply = "";
-    const completion = await engine.chat.completions.create({
-      stream: true,
-      messages: messages,
-      max_tokens: 80, // Increased for better quality (1-2 sentences)
-      temperature: 0.7,
-      top_p: 0.9,
-      stop: ["\n\n", "\n\n\n"] // Only stop on double newlines
-    });
-
-    for await (const chunk of completion) {
-      const delta = chunk.choices[0]?.delta?.content;
-      if (delta) {
-        reply += delta;
-      }
-    }
-
-    // Remove common preambles and meta-text
-    const cleanReply = (text: string): string => {
-      // Remove common preambles
-      const preamblePatterns = [
-        /^Here'?s? (?:a |the |your |my )?(?:professional |rewritten |revised |improved )?(?:LinkedIn |response|reply|version|comment).*?:\s*/i,
-        /^This (?:is |would be |could be )?(?:a |the |your |my )?(?:LinkedIn |response|reply).*?:\s*/i,
-        /^(?:Sure|Certainly|Absolutely)[,!]?\s*(?:here'?s?|this is).*?:\s*/i,
-        /^I'?(?:ve|ll|d)? (?:rewritten|revised|created|generated|made).*?:\s*/i,
-        /^(?:Response|Reply|Comment|Answer):\s*/i,
-        /^Here you go:\s*/i,
-        /^.*?(?:meets?|meeting|fulfill?s?) (?:the |your )?requirements?.*?:\s*/i,
-      ];
-
-      let cleaned = text.trim();
-      for (const pattern of preamblePatterns) {
-        cleaned = cleaned.replace(pattern, '');
-      }
-
-      // Also remove any lines that are just meta-commentary
-      const lines = cleaned.split('\n');
-      const contentLines = lines.filter(line => {
-        const lower = line.toLowerCase().trim();
-        return !lower.startsWith('here') &&
-               !lower.includes('rewritten') &&
-               !lower.includes('requirements') &&
-               !lower.includes('professional linkedin');
-      });
-
-      return contentLines.join(' ').trim();
-    };
-
-    const cleanedReply = cleanReply(reply);
-
-    // Limit to 1-2 sentences for quality
-    const sentences = cleanedReply.split(/[.!?]+/).filter(s => s.trim().length > 0);
-    const maxSentences = sentences.slice(0, 2).join('. ');
-    const finalReply = maxSentences.trim() + (cleanedReply.endsWith('?') ? '' : '.');
-    
-    console.log('🟢 STEP 5G: Generation complete:', finalReply);
-    console.log('🟢 Word count:', finalReply.split(' ').length);
-    
-    sendResponse({ 
-      reply: finalReply,
-      basedOnComments: true,
-      commentCount: topComments.length
-    });
-    
-  } catch (error) {
-    console.error('🔴 STEP 5 ERROR in handleLinkedInReplyWithComments:', error);
-    sendResponse({ 
-      error: 'Failed to generate reply',
-      fallback: true 
-    });
-  }
-}
-
-async function handleLinkedInReply(postContent: string, sendResponse: (response: any) => void) {
-  console.log('🟢 STEP 5: handleLinkedInReply started');
-  
-  try {
-    console.log('🟢 STEP 5A: Ensuring engine...');
-    const engine = await ensureEngine();
-    console.log('🟢 STEP 5B: Engine ready');
-    
-    console.log('🟢 STEP 5C: Getting user prompt for standard...');
-    
-    // ALWAYS get user's custom prompt or fall back to default
-    const systemPrompt = await getUserPrompt('standard');
-    console.log('� STEP 5D: Got prompt type:', systemPrompt === DEFAULT_PROMPTS.standard ? 'DEFAULT' : 'CUSTOM');
-    console.log('�📋 Using system prompt:', systemPrompt.substring(0, 100) + '...');
-
-    // Check storage directly here for debugging
-    const storageCheck = await chrome.storage.sync.get(['customPrompts']);
-    console.log('🟢 STEP 5E: Direct storage check:', storageCheck);
-
-    // Analyze post content for better context
-    const postLength = postContent.length;
-    const hasQuestion = postContent.includes('?');
-    const hasData = /\d+%|\d+\s*(million|billion|thousand)|\$\d+/i.test(postContent);
-    
-    const contextHints = `
-POST ANALYSIS:
-- Length: ${postLength < 100 ? 'Brief' : postLength < 300 ? 'Medium' : 'Detailed'}
-- Type: ${hasQuestion ? 'Question/Discussion' : hasData ? 'Data/Insights' : 'Thought/Opinion'}
-- Engagement opportunity: ${hasQuestion ? 'Answer the question' : 'Add perspective'}`;
-
-    const userPrompt = `Generate a professional LinkedIn reply to this post:
-
-"${postContent}"
-${contextHints}
-
-CRITICAL REQUIREMENTS:
-- 1-2 impactful sentences (maximum 40 words total)
-- No introductory phrases like "Great post!"
-- Add genuine value or ask a thoughtful question
-- Be conversational and engaging
-- DO NOT include any preambles like "Here's a reply:" or explanations
-- Start your response immediately with the actual content
-
-Write your reply directly (no preambles):`;
-
-    const messages: ChatCompletionMessageParam[] = [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt }
-    ];
-
-    console.log('🟢 STEP 5F: Starting AI generation...');
-
-    let reply = "";
-    const completion = await engine.chat.completions.create({
-      stream: true,
-      messages: messages,
-      max_tokens: 80, // Increased for better quality (1-2 sentences)
-      temperature: 0.7,
-      top_p: 0.9,
-      stop: ["\n\n", "\n\n\n"] // Only stop on double newlines
-    });
-
-    for await (const chunk of completion) {
-      const delta = chunk.choices[0]?.delta?.content;
-      if (delta) {
-        reply += delta;
-      }
-    }
-
-    // Remove common preambles and meta-text
-    const cleanReply = (text: string): string => {
-      // Remove common preambles
-      const preamblePatterns = [
-        /^Here'?s? (?:a |the |your |my )?(?:professional |rewritten |revised |improved )?(?:LinkedIn |response|reply|version|comment).*?:\s*/i,
-        /^This (?:is |would be |could be )?(?:a |the |your |my )?(?:LinkedIn |response|reply).*?:\s*/i,
-        /^(?:Sure|Certainly|Absolutely)[,!]?\s*(?:here'?s?|this is).*?:\s*/i,
-        /^I'?(?:ve|ll|d)? (?:rewritten|revised|created|generated|made).*?:\s*/i,
-        /^(?:Response|Reply|Comment|Answer):\s*/i,
-        /^Here you go:\s*/i,
-        /^.*?(?:meets?|meeting|fulfill?s?) (?:the |your )?requirements?.*?:\s*/i,
-      ];
-
-      let cleaned = text.trim();
-      for (const pattern of preamblePatterns) {
-        cleaned = cleaned.replace(pattern, '');
-      }
-
-      // Also remove any lines that are just meta-commentary
-      const lines = cleaned.split('\n');
-      const contentLines = lines.filter(line => {
-        const lower = line.toLowerCase().trim();
-        return !lower.startsWith('here') &&
-               !lower.includes('rewritten') &&
-               !lower.includes('requirements') &&
-               !lower.includes('professional linkedin');
-      });
-
-      return contentLines.join(' ').trim();
-    };
-
-    const cleanedReply = cleanReply(reply);
-
-    // Limit to 1-2 sentences for quality
-    const sentences = cleanedReply.split(/[.!?]+/).filter(s => s.trim().length > 0);
-    const maxSentences = sentences.slice(0, 2).join('. ');
-    const finalReply = maxSentences.trim() + (cleanedReply.endsWith('?') ? '' : '.');
-    
-    console.log('🟢 STEP 5G: Generation complete:', finalReply);
-    console.log('🟢 Word count:', finalReply.split(' ').length);
-    
-    sendResponse({ reply: finalReply });
-    
-  } catch (error) {
-    console.error('🔴 STEP 5 ERROR in handleLinkedInReply:', error);
-    
-    // Shorter fallback replies (1-2 sentences)
-    const fallbackReplies = [
-      "Insightful perspective! What's been your experience with this approach?",
-      "This resonates strongly with what we're seeing in the field.",
-      "Excellent points - particularly about the implementation challenges.",
-      "Appreciate you sharing this data-driven analysis!",
-      "Interesting take - how do you see this evolving in the next year?"
-    ];
-    
-    const fallbackReply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
-    
-    sendResponse({ 
-      reply: fallbackReply,
-      error: 'AI engine is initializing. Using a suggested reply for now.',
-      isInitializing: engineInitializing
-    });
-  }
-}
 
 // Keep service worker alive
-chrome.alarms.create('keep-alive', { periodInMinutes: 0.25 });
-chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === 'keep-alive') {
-    // Just a keep-alive ping
-    console.log('Keep-alive ping');
-    // Also perform health check periodically
-    if (engineInitialized) {
-      performHealthCheck();
-    }
-  }
-});
+const keepAlive = () => setInterval(chrome.runtime.getPlatformInfo, 20e3);
+chrome.runtime.onStartup.addListener(keepAlive);
+keepAlive();
 
-// Listen for tab updates to detect LinkedIn navigation
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status === 'complete' && tab.url?.includes('linkedin.com')) {
-    console.log('🔍 LinkedIn tab detected, ensuring engine is ready...');
-    // Pre-initialize engine for LinkedIn tabs
-    ensureEngine().catch(error => {
-      console.error('Failed to pre-initialize for LinkedIn tab:', error);
-    });
-  }
-});
+console.log('✅ ReplyMate Multi-Provider Background Service Ready');

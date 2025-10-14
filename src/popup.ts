@@ -2,8 +2,12 @@
 
 import "./popup.css";
 import { prebuiltAppConfig } from "@mlc-ai/web-llm";
+import { ProviderStorage } from "./services/provider-storage";
 
-// Model configuration for different use cases
+// Provider types
+type ProviderType = 'local' | 'claude' | 'openai' | 'gemini';
+
+// Model configuration for WebLLM models
 const MODEL_PROFILES = {
   'professional': {
     models: ['Llama-3.2-3B-Instruct-q4f16_1-MLC', 'Llama-3.2-1B-Instruct-q4f16_1-MLC', 'gemma-2-2b-it-q4f16_1-MLC'],
@@ -36,18 +40,29 @@ enum ModelStatus {
   NOT_INITIALIZED = 'not_initialized'
 }
 
-// Loading stages for detailed progress
-interface LoadingProgress {
-  progress: number;
-  message: string;
-  stage: 'initializing' | 'downloading' | 'loading' | 'finalizing' | 'complete';
-  isFirstLoad: boolean;
-}
-
 // Get element by ID with type safety
 function getElementAndCheck(id: string): HTMLElement | null {
   return document.getElementById(id);
 }
+
+// UI Elements - Provider Selection
+const providerSelector = getElementAndCheck("provider-selection") as HTMLSelectElement;
+const apiKeySection = getElementAndCheck("apiKeySection");
+const apiKeyInput = getElementAndCheck("apiKeyInput") as HTMLInputElement;
+const apiKeyLabel = getElementAndCheck("apiKeyLabel");
+const apiKeyHelpText = getElementAndCheck("apiKeyHelpText");
+const saveApiKeyBtn = getElementAndCheck("saveApiKey") as HTMLButtonElement;
+const testApiKeyBtn = getElementAndCheck("testApiKey") as HTMLButtonElement;
+const toggleApiKeyBtn = getElementAndCheck("toggleApiKeyVisibility") as HTMLButtonElement;
+
+// Provider info cards
+const localInfo = getElementAndCheck("webllmInfo"); // webllmInfo is the HTML id, keeping for backward compat
+const claudeInfo = getElementAndCheck("claudeInfo");
+const openaiInfo = getElementAndCheck("openaiInfo");
+const geminiInfo = getElementAndCheck("geminiInfo");
+
+// Model section (for WebLLM)
+const modelSection = getElementAndCheck("modelSection");
 
 // UI Elements - Model Status Bar
 const modelStatusBar = getElementAndCheck("modelStatusBar");
@@ -58,7 +73,7 @@ const progressContainer = getElementAndCheck("progressContainer");
 const progressFill = getElementAndCheck("progressFill");
 const progressText = getElementAndCheck("progressText");
 
-// UI Elements - Model Configuration
+// UI Elements - Model Configuration (WebLLM)
 const modelSelector = getElementAndCheck("model-selection") as HTMLSelectElement;
 const modelChangeStatus = getElementAndCheck("modelChangeStatus");
 const modelDetails = getElementAndCheck("modelDetails");
@@ -80,16 +95,236 @@ const settingsStatus = getElementAndCheck("settingsStatus");
 const checkStatusBtn = getElementAndCheck("checkStatus") as HTMLButtonElement;
 const reinitModelBtn = getElementAndCheck("reinitModel") as HTMLButtonElement;
 
-// Model configuration
+// Current state
+let currentProvider: ProviderType = 'local';
 let selectedModel = "";
-let actualActiveModel = ""; // The model actually running in background
-let currentProfile: ModelProfileKey = 'balanced';
+let apiKeyVisible = false;
 
 // Default prompts
 let defaultPrompts = {
   standard: '',
   withComments: ''
 };
+
+// Provider API key help text
+const API_KEY_HELP: Record<ProviderType, string> = {
+  local: 'No API key required - runs locally on your device',
+  claude: 'Get your API key from console.anthropic.com/api',
+  openai: 'Get your API key from platform.openai.com/api-keys',
+  gemini: 'Get your API key from makersuite.google.com/app/apikey'
+};
+
+// Initialize provider selection
+async function initializeProviderSelection() {
+  // Load saved provider
+  const settings = await ProviderStorage.getSettings();
+  currentProvider = (settings as any).provider || 'local';
+
+  if (providerSelector) {
+    providerSelector.value = currentProvider;
+  }
+
+  // Update UI based on provider
+  await updateProviderUI(currentProvider);
+
+  // Load API key if exists
+  if (currentProvider !== 'local') {
+    const apiKey = await ProviderStorage.getApiKey(currentProvider);
+    if (apiKeyInput && apiKey) {
+      apiKeyInput.value = apiKey;
+    }
+  }
+}
+
+// Update UI based on selected provider
+async function updateProviderUI(provider: ProviderType) {
+  currentProvider = provider;
+
+  // Show/hide API key section
+  if (apiKeySection) {
+    apiKeySection.style.display = provider === 'local' ? 'none' : 'block';
+  }
+
+  // Show/hide model section (only for WebLLM)
+  if (modelSection) {
+    modelSection.style.display = provider === 'local' ? 'block' : 'none';
+  }
+
+  // Update API key help text
+  if (apiKeyLabel) {
+    const labels: Record<ProviderType, string> = {
+      local: 'API Key',
+      claude: 'Claude API Key',
+      openai: 'OpenAI API Key',
+      gemini: 'Gemini API Key'
+    };
+    apiKeyLabel.textContent = labels[provider];
+  }
+
+  if (apiKeyHelpText) {
+    apiKeyHelpText.textContent = API_KEY_HELP[provider];
+  }
+
+  // Update placeholder
+  if (apiKeyInput) {
+    const placeholders: Record<ProviderType, string> = {
+      local: '',
+      claude: 'sk-ant-api03-...',
+      openai: 'sk-...',
+      gemini: 'AIza...'
+    };
+    apiKeyInput.placeholder = `Enter your ${placeholders[provider]} API key...`;
+  }
+
+  // Show/hide provider info cards
+  const infoCards = { webllmInfo: localInfo, claudeInfo, openaiInfo, geminiInfo };
+  Object.entries(infoCards).forEach(([key, element]) => {
+    if (element) {
+      element.style.display = key === `${provider}Info` ? 'block' : 'none';
+    }
+  });
+
+  // Update status based on provider
+  await checkProviderStatus();
+}
+
+// Check provider status
+async function checkProviderStatus() {
+  updateModelStatus(ModelStatus.CHECKING, `Checking ${currentProvider} status...`);
+
+  if (currentProvider === 'local') {
+    // Check WebLLM model status
+    checkModelStatus();
+  } else {
+    // Check API key status for external providers
+    const apiKey = await ProviderStorage.getApiKey(currentProvider);
+    if (!apiKey) {
+      updateModelStatus(ModelStatus.NOT_INITIALIZED, 'API key required', `Please enter your ${currentProvider} API key`);
+    } else {
+      updateModelStatus(ModelStatus.CHECKING, 'Validating API key...');
+
+      // Send message to background to validate API key
+      chrome.runtime.sendMessage({
+        action: 'validateApiKey',
+        provider: currentProvider,
+        apiKey: apiKey
+      }, (response) => {
+        if (response?.valid) {
+          updateModelStatus(ModelStatus.READY, `✅ ${currentProvider} ready`, 'API key validated');
+        } else {
+          updateModelStatus(ModelStatus.ERROR, 'Invalid API key', response?.error || 'Please check your API key');
+        }
+      });
+    }
+  }
+}
+
+// Handle provider change
+async function handleProviderChange() {
+  if (!providerSelector) return;
+
+  const newProvider = providerSelector.value as ProviderType;
+  if (newProvider === currentProvider) return;
+
+  // Save new provider
+  await ProviderStorage.saveSettings({
+    model: newProvider === 'local' ? selectedModel : undefined
+  } as any);
+
+  // Update UI
+  await updateProviderUI(newProvider);
+
+  // Notify background script
+  chrome.runtime.sendMessage({
+    action: 'switchProvider',
+    provider: newProvider
+  }, (response) => {
+    if (response?.success) {
+      showStatus(`Switched to ${newProvider}`, 'success');
+    } else {
+      showStatus(`Failed to switch provider: ${response?.error}`, 'error');
+    }
+  });
+}
+
+// Save API key
+async function saveApiKey() {
+  if (!apiKeyInput || currentProvider === 'local') return;
+
+  const apiKey = apiKeyInput.value.trim();
+  if (!apiKey) {
+    showStatus('Please enter an API key', 'error');
+    return;
+  }
+
+  saveApiKeyBtn.disabled = true;
+  showStatus('Saving API key...', 'info');
+
+  try {
+    await ProviderStorage.setApiKey(currentProvider, apiKey);
+
+    // Validate the API key
+    chrome.runtime.sendMessage({
+      action: 'validateApiKey',
+      provider: currentProvider,
+      apiKey: apiKey
+    }, (response) => {
+      saveApiKeyBtn.disabled = false;
+
+      if (response?.valid) {
+        showStatus('✅ API key saved and validated!', 'success');
+        updateModelStatus(ModelStatus.READY, `✅ ${currentProvider} ready`, 'API key validated');
+      } else {
+        showStatus(`API key saved but validation failed: ${response?.error || 'Unknown error'}`, 'error');
+        updateModelStatus(ModelStatus.ERROR, 'Invalid API key', 'Please check your API key');
+      }
+    });
+  } catch (error) {
+    saveApiKeyBtn.disabled = false;
+    showStatus('Failed to save API key', 'error');
+  }
+}
+
+// Test API key connection
+async function testApiKey() {
+  if (!apiKeyInput || currentProvider === 'local') return;
+
+  const apiKey = apiKeyInput.value.trim();
+  if (!apiKey) {
+    showStatus('Please enter an API key first', 'error');
+    return;
+  }
+
+  testApiKeyBtn.disabled = true;
+  showStatus('Testing connection...', 'info');
+
+  chrome.runtime.sendMessage({
+    action: 'testProvider',
+    provider: currentProvider,
+    apiKey: apiKey
+  }, (response) => {
+    testApiKeyBtn.disabled = false;
+
+    if (response?.success) {
+      showStatus(`✅ Connection successful! Model: ${response.model}`, 'success');
+    } else {
+      showStatus(`Connection failed: ${response?.error || 'Unknown error'}`, 'error');
+    }
+  });
+}
+
+// Toggle API key visibility
+function toggleApiKeyVisibility() {
+  if (!apiKeyInput || !toggleApiKeyBtn) return;
+
+  apiKeyVisible = !apiKeyVisible;
+  apiKeyInput.type = apiKeyVisible ? 'text' : 'password';
+
+  const icon = toggleApiKeyBtn.querySelector('i');
+  if (icon) {
+    icon.className = apiKeyVisible ? 'fa fa-eye-slash' : 'fa fa-eye';
+  }
+}
 
 // Update model status UI
 function updateModelStatus(status: ModelStatus, message: string, details?: string) {
@@ -132,77 +367,29 @@ function updateModelStatus(status: ModelStatus, message: string, details?: strin
   }
 }
 
-// Update progress bar
-function updateProgress(progress: number, text?: string) {
-  if (progressContainer && progressFill && progressText) {
-    if (progress > 0) {
-      progressContainer.style.display = 'flex';
-      progressFill.style.width = `${Math.min(100, Math.max(0, progress))}%`;
-      progressText.textContent = text || `${Math.round(progress)}%`;
+// Check model status (for WebLLM)
+async function checkModelStatus() {
+  if (currentProvider !== 'local') return;
+
+  updateModelStatus(ModelStatus.CHECKING, "Checking model status...");
+
+  chrome.runtime.sendMessage({ action: 'checkEngineStatus' }, (response) => {
+    if (chrome.runtime.lastError) {
+      updateModelStatus(ModelStatus.ERROR, "Extension error", chrome.runtime.lastError.message);
+      return;
+    }
+
+    if (response?.engineReady) {
+      const activeModel = response.currentModel || selectedModel;
+      const modelName = getModelDisplayName(activeModel);
+      updateModelStatus(ModelStatus.READY, "✅ AI Model Ready", `Active: ${modelName}`);
+      showModelDetails(activeModel, true);
+    } else if (response?.initializing) {
+      updateModelStatus(ModelStatus.LOADING, "Model initializing...", "Loading from cache");
     } else {
-      progressContainer.style.display = 'none';
+      updateModelStatus(ModelStatus.NOT_INITIALIZED, "Model not initialized", "Click 'Reinitialize Model' to start");
     }
-  }
-}
-
-// Show model details
-function showModelDetails(modelId: string, isActuallyActive: boolean = false) {
-  if (!modelDetails || !currentModelName || !modelPerformance || !memoryUsage) return;
-
-  modelDetails.style.display = 'block';
-
-  // Get readable name
-  const displayName = getModelDisplayName(modelId);
-  currentModelName.textContent = displayName;
-
-  // Update the actual active model if confirmed by background
-  if (isActuallyActive) {
-    actualActiveModel = modelId;
-  }
-
-  // Determine profile from model
-  let profile: ModelProfileKey = 'balanced';
-  for (const [key, config] of Object.entries(MODEL_PROFILES)) {
-    if ((config.models as readonly string[]).includes(modelId)) {
-      profile = key as ModelProfileKey;
-      break;
-    }
-  }
-
-  const profileConfig = MODEL_PROFILES[profile];
-  modelPerformance.textContent = profileConfig.performance;
-  memoryUsage.textContent = profileConfig.memory + ' Memory Usage';
-}
-
-// Smart model selection - BALANCED for reliable LinkedIn performance
-function getOptimalModel(): string {
-  try {
-    const availableModelIds = prebuiltAppConfig.model_list.map(m => m.model_id);
-
-    // Prioritize balanced models: Quality with stable performance
-    const optimalModels = [
-      "Llama-3.2-1B-Instruct-q4f16_1-MLC",  // OPTIMAL: Best balance of quality and performance
-      "gemma-2-2b-it-q4f16_1-MLC",          // Good alternative
-      "Phi-3.5-mini-instruct-q4f16_1-MLC",  // Lightweight option
-      "Llama-3.2-3B-Instruct-q4f16_1-MLC",  // Heavy model (may have issues)
-      "Qwen2.5-0.5B-Instruct-q4f16_1-MLC"   // Ultra-light fallback
-    ];
-
-    // Return the first available balanced model
-    for (const modelId of optimalModels) {
-      if (availableModelIds.includes(modelId)) {
-        console.log('⚖️ Selected balanced model for LinkedIn:', modelId);
-        currentProfile = 'balanced';
-        return modelId;
-      }
-    }
-
-    // Ultimate fallback
-    return availableModelIds[0] || "Llama-3.2-1B-Instruct-q4f16_1-MLC";
-  } catch (error) {
-    console.error('Error selecting optimal model:', error);
-    return "Llama-3.2-1B-Instruct-q4f16_1-MLC"; // Default to balanced
-  }
+  });
 }
 
 // Extract display name from model ID
@@ -218,22 +405,36 @@ function getModelDisplayName(modelId: string): string {
   return nameParts.join('-');
 }
 
-// Initialize model selector
-async function setupModelSelector() {
-  if (!modelSelector) return;
+// Show model details (for WebLLM)
+function showModelDetails(modelId: string, isActuallyActive: boolean = false) {
+  if (!modelDetails || !currentModelName || !modelPerformance || !memoryUsage) return;
+  if (currentProvider !== 'local') return;
 
-  updateModelStatus(ModelStatus.CHECKING, "Loading model list...");
+  modelDetails.style.display = 'block';
+
+  // Get readable name
+  const displayName = getModelDisplayName(modelId);
+  currentModelName.textContent = displayName;
+
+  // Determine profile from model
+  let profile: ModelProfileKey = 'balanced';
+  for (const [key, config] of Object.entries(MODEL_PROFILES)) {
+    if ((config.models as readonly string[]).includes(modelId)) {
+      profile = key as ModelProfileKey;
+      break;
+    }
+  }
+
+  const profileConfig = MODEL_PROFILES[profile];
+  modelPerformance.textContent = profileConfig.performance;
+  memoryUsage.textContent = profileConfig.memory + ' Memory Usage';
+}
+
+// Initialize model selector (for WebLLM)
+async function setupModelSelector() {
+  if (!modelSelector || currentProvider !== 'local') return;
 
   modelSelector.innerHTML = '';
-
-  // First check what model is actually active in background
-  await checkActualActiveModel();
-
-  // Use actual active model if available, otherwise fall back to stored or optimal
-  const { selectedModel: storedModel } = await chrome.storage.local.get('selectedModel');
-  if (!selectedModel) {
-    selectedModel = actualActiveModel || storedModel || getOptimalModel();
-  }
 
   const appConfig = prebuiltAppConfig;
   const availableModels = new Set(appConfig.model_list.map(m => m.model_id));
@@ -260,137 +461,23 @@ async function setupModelSelector() {
       modelSelector.appendChild(optgroup);
     }
   });
-
-  // Don't show details yet - wait for actual status check
-  // updateModelStatus will be called by checkModelStatus()
 }
 
-// Handle model selection change
-async function handleSelectChange() {
-  if (!modelSelector || !modelChangeStatus) return;
+// Show status message
+function showStatus(message: string, type: 'success' | 'error' | 'info') {
+  if (!settingsStatus) return;
 
-  const newModel = modelSelector.value;
-  if (newModel === selectedModel) return;
+  settingsStatus.innerHTML = message;
+  settingsStatus.className = `status-message ${type}`;
+  settingsStatus.style.display = 'block';
 
-  selectedModel = newModel;
-  await chrome.storage.local.set({ selectedModel });
+  const displayTime = type === 'info' ? 5000 : 3000;
 
-  // Show loading indicator
-  modelChangeStatus.style.display = 'flex';
-  modelSelector.disabled = true;
-
-  updateModelStatus(ModelStatus.LOADING, "Switching model...", `Loading ${getModelDisplayName(selectedModel)}`);
-  updateProgress(0, "Initializing...");
-
-  // Notify background to load the new model
-  chrome.runtime.sendMessage({
-    action: 'updateModel',
-    model: selectedModel
-  }, (response) => {
-    modelChangeStatus.style.display = 'none';
-    modelSelector.disabled = false;
-    updateProgress(0);
-
-    if (response?.success) {
-      actualActiveModel = selectedModel;
-      showModelDetails(selectedModel, true);
-      updateModelStatus(ModelStatus.READY, "✅ Model switched successfully", `Active: ${getModelDisplayName(selectedModel)}`);
-    } else {
-      // Revert selection on failure
-      modelSelector.value = actualActiveModel || selectedModel;
-      updateModelStatus(ModelStatus.ERROR, "Failed to switch model", "Please try again");
+  setTimeout(() => {
+    if (settingsStatus) {
+      settingsStatus.style.display = 'none';
     }
-  });
-}
-
-// Check what model is actually active in background
-async function checkActualActiveModel(): Promise<void> {
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage({ action: 'checkEngineStatus' }, async (response) => {
-      if (!chrome.runtime.lastError && response?.currentModel) {
-        actualActiveModel = response.currentModel;
-
-        // Update selector to match actual model
-        if (modelSelector && actualActiveModel) {
-          modelSelector.value = actualActiveModel;
-          selectedModel = actualActiveModel;
-          await chrome.storage.local.set({ selectedModel: actualActiveModel });
-        }
-      }
-      resolve();
-    });
-  });
-}
-
-// Check model status
-async function checkModelStatus() {
-  updateModelStatus(ModelStatus.CHECKING, "Checking model status...");
-  updateProgress(5, "Connecting...");
-
-  chrome.runtime.sendMessage({ action: 'checkEngineStatus' }, (response) => {
-    if (chrome.runtime.lastError) {
-      updateModelStatus(ModelStatus.ERROR, "Extension error", chrome.runtime.lastError.message);
-      updateProgress(0);
-      return;
-    }
-
-    if (response?.engineReady) {
-      // Use the actual model from background
-      const activeModel = response.currentModel || selectedModel;
-      actualActiveModel = activeModel;
-
-      // Update selector to match
-      if (modelSelector && activeModel !== modelSelector.value) {
-        modelSelector.value = activeModel;
-        selectedModel = activeModel;
-      }
-
-      const modelName = getModelDisplayName(activeModel);
-      updateModelStatus(ModelStatus.READY, "✅ AI Model Ready", `Active: ${modelName} • ${response.cacheMessage || ''}`);
-      showModelDetails(activeModel, true);
-      updateProgress(100, "100%");
-      setTimeout(() => updateProgress(0), 1500);
-    } else if (response?.initializing) {
-      const cacheMsg = response?.cached
-        ? "Loading from cache (fast)"
-        : "First-time download (1-3 minutes)";
-      updateModelStatus(ModelStatus.LOADING, "Model initializing...", cacheMsg);
-      updateProgress(15, "Starting...");
-
-      // If not cached, show warning
-      if (!response?.cached) {
-        showStatus('⏱️ First-time setup: Downloading AI model (50-200MB). This only happens once!', 'info');
-      }
-    } else {
-      updateModelStatus(ModelStatus.NOT_INITIALIZED, "Model not initialized", "Click 'Reinitialize Model' to start");
-      updateProgress(0);
-    }
-  });
-}
-
-// Reinitialize model
-async function reinitializeModel() {
-  if (!reinitModelBtn) return;
-
-  reinitModelBtn.disabled = true;
-  updateModelStatus(ModelStatus.LOADING, "Starting model initialization...", "Checking cache status...");
-  updateProgress(0, "Preparing...");
-
-  // Request model initialization
-  chrome.runtime.sendMessage({
-    action: 'initializeModel'
-  }, (response) => {
-    reinitModelBtn.disabled = false;
-
-    if (response?.success) {
-      updateProgress(100, "Complete!");
-      // Re-check actual status after initialization
-      setTimeout(() => checkModelStatus(), 500);
-    } else {
-      updateProgress(0);
-      updateModelStatus(ModelStatus.ERROR, "Initialization failed", response?.error || "Please try again");
-    }
-  });
+  }, displayTime);
 }
 
 // Load settings from storage
@@ -459,101 +546,56 @@ async function savePrompts() {
   });
 }
 
-// Reset prompts to defaults
-async function resetPrompts() {
-  if (!confirm('Reset all prompts to default values?')) {
-    return;
-  }
-
-  chrome.runtime.sendMessage({ action: 'resetPrompts' }, (response) => {
-    if (response?.success) {
-      if (standardPromptElement) {
-        standardPromptElement.value = defaultPrompts.standard;
-      }
-      if (withCommentsPromptElement) {
-        withCommentsPromptElement.value = defaultPrompts.withComments;
-      }
-      showStatus('✅ Prompts reset to defaults', 'success');
-    } else {
-      showStatus('Failed to reset prompts', 'error');
-    }
-  });
-}
-
-// Test prompts
-async function testPrompts() {
-  if (!testPromptsBtn) return;
-
-  testPromptsBtn.disabled = true;
-  showStatus('Testing prompts...', 'info');
-
-  const standardPrompt = standardPromptElement?.value.trim() || '';
-  const withCommentsPrompt = withCommentsPromptElement?.value.trim() || '';
-
-  chrome.runtime.sendMessage({
-    action: 'savePrompts',
-    prompts: {
-      standard: standardPrompt,
-      withComments: withCommentsPrompt
-    }
-  }, (saveResponse) => {
-    if (saveResponse?.success) {
-      chrome.runtime.sendMessage({ action: 'verifyPrompts' }, (response) => {
-        testPromptsBtn.disabled = false;
-
-        if (response?.hasCustomPrompts) {
-          const statusMsg = `✅ Custom prompts active<br>` +
-                          `Standard: ${response.isUsingCustomStandard ? 'Custom' : 'Default'}<br>` +
-                          `Smart: ${response.isUsingCustomComments ? 'Custom' : 'Default'}`;
-          showStatus(statusMsg, 'success');
-        } else {
-          showStatus('Using default prompts', 'info');
-        }
-      });
-    } else {
-      testPromptsBtn.disabled = false;
-      showStatus('Failed to save prompts for testing', 'error');
-    }
-  });
-}
-
-// Show status message
-function showStatus(message: string, type: 'success' | 'error' | 'info') {
-  if (!settingsStatus) return;
-
-  settingsStatus.innerHTML = message;
-  settingsStatus.className = `status-message ${type}`;
-  settingsStatus.style.display = 'block';
-
-  // Longer display time for info messages
-  const displayTime = type === 'info' ? 5000 : 3000;
-
-  setTimeout(() => {
-    if (settingsStatus) {
-      settingsStatus.style.display = 'none';
-    }
-  }, displayTime);
-}
-
 // Initialize popup on DOM ready
 document.addEventListener("DOMContentLoaded", async () => {
-  console.log('🚀 ReplyMate popup opened - Enhanced UI');
+  console.log('🚀 ReplyMate popup opened - Multi-Provider UI');
 
   // Initial status
   updateModelStatus(ModelStatus.CHECKING, "Initializing ReplyMate...");
 
-  // Setup model selector first
-  await setupModelSelector();
+  // Initialize provider selection
+  await initializeProviderSelection();
+
+  // Setup model selector if WebLLM
+  if (currentProvider === 'local') {
+    await setupModelSelector();
+  }
 
   // Load settings
   await loadSettings();
 
-  // Check model status immediately to sync UI
-  checkModelStatus();
+  // Check provider status
+  await checkProviderStatus();
 
   // Setup event handlers
+  if (providerSelector) {
+    providerSelector.addEventListener('change', handleProviderChange);
+  }
+
+  if (saveApiKeyBtn) {
+    saveApiKeyBtn.addEventListener('click', saveApiKey);
+  }
+
+  if (testApiKeyBtn) {
+    testApiKeyBtn.addEventListener('click', testApiKey);
+  }
+
+  if (toggleApiKeyBtn) {
+    toggleApiKeyBtn.addEventListener('click', toggleApiKeyVisibility);
+  }
+
   if (modelSelector) {
-    modelSelector.addEventListener("change", handleSelectChange);
+    modelSelector.addEventListener('change', async () => {
+      selectedModel = modelSelector.value;
+      await ProviderStorage.saveSettings({
+        model: selectedModel
+      } as any);
+
+      chrome.runtime.sendMessage({
+        action: 'updateModel',
+        model: selectedModel
+      });
+    });
   }
 
   if (savePromptsBtn) {
@@ -561,57 +603,49 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   if (resetPromptsBtn) {
-    resetPromptsBtn.addEventListener('click', resetPrompts);
-  }
+    resetPromptsBtn.addEventListener('click', async () => {
+      if (!confirm('Reset all prompts to default values?')) return;
 
-  if (testPromptsBtn) {
-    testPromptsBtn.addEventListener('click', testPrompts);
+      chrome.runtime.sendMessage({ action: 'resetPrompts' }, (response) => {
+        if (response?.success) {
+          if (standardPromptElement) {
+            standardPromptElement.value = defaultPrompts.standard;
+          }
+          if (withCommentsPromptElement) {
+            withCommentsPromptElement.value = defaultPrompts.withComments;
+          }
+          showStatus('✅ Prompts reset to defaults', 'success');
+        } else {
+          showStatus('Failed to reset prompts', 'error');
+        }
+      });
+    });
   }
 
   if (checkStatusBtn) {
-    checkStatusBtn.addEventListener('click', checkModelStatus);
+    checkStatusBtn.addEventListener('click', checkProviderStatus);
   }
 
   if (reinitModelBtn) {
-    reinitModelBtn.addEventListener('click', reinitializeModel);
-  }
+    reinitModelBtn.addEventListener('click', async () => {
+      reinitModelBtn.disabled = true;
+      updateModelStatus(ModelStatus.LOADING, "Initializing provider...");
 
-  // Listen for progress updates from background
-  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.type === 'modelLoadProgress') {
-      handleProgressUpdate(message as LoadingProgress);
-    }
-  });
+      chrome.runtime.sendMessage({
+        action: 'initializeProvider',
+        provider: currentProvider
+      }, (response) => {
+        reinitModelBtn.disabled = false;
+
+        if (response?.success) {
+          checkProviderStatus();
+        } else {
+          updateModelStatus(ModelStatus.ERROR, "Initialization failed", response?.error || "Please try again");
+        }
+      });
+    });
+  }
 
   // Notify background that popup is open
   chrome.runtime.sendMessage({ action: 'popupReady' });
-
-  // Auto-check status every 10 seconds while popup is open
-  setInterval(() => {
-    // Only auto-check if not in loading state
-    if (modelStatusBar && !modelStatusBar.classList.contains('loading')) {
-      checkModelStatus();
-    }
-  }, 10000);
 });
-
-// Handle progress updates from background
-function handleProgressUpdate(update: LoadingProgress) {
-  const { progress, message, stage, isFirstLoad } = update;
-
-  // Update status based on stage
-  if (stage === 'complete') {
-    updateModelStatus(ModelStatus.READY, message, `Model cached for fast loading`);
-    updateProgress(100, "100%");
-    setTimeout(() => updateProgress(0), 2000);
-  } else {
-    updateModelStatus(ModelStatus.LOADING, message,
-      isFirstLoad ? "⏱️ One-time download • Future loads will be instant" : "⚡ Loading from cache");
-    updateProgress(progress, `${progress}%`);
-  }
-
-  // Show additional info for first load
-  if (isFirstLoad && progress === 0) {
-    showStatus('📥 First-time setup: The AI model needs to be downloaded once. After this, it will load instantly from cache!', 'info');
-  }
-}

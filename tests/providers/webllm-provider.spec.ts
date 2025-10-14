@@ -43,7 +43,9 @@ jest.mock('../../src/model-loader', () => {
     }
   }
 
+  // Set the default export and named exports
   return {
+    __esModule: true,
     default: MockOptimizedModelLoader,
     ModelLoadingState: {},
     OptimizedModelLoader: MockOptimizedModelLoader
@@ -74,9 +76,46 @@ import { ProviderError } from '../../src/inference/inference-provider';
 
 describe('WebLLMProvider', () => {
   let provider: WebLLMProvider;
+  let MockLoader: any;
 
   beforeEach(() => {
     jest.clearAllMocks();
+
+    // Reset mock loader for each test
+    MockLoader = require('../../src/model-loader').default;
+    MockLoader.getInstance = jest.fn().mockReturnValue({
+      loadModel: jest.fn().mockImplementation(async (_modelId: string, progressCallback?: any) => {
+        if (progressCallback) {
+          progressCallback({
+            progress: 0.5,
+            progressText: 'Loading model...',
+            isLoading: true,
+            error: null,
+            attemptNumber: 1
+          });
+        }
+
+        return {
+          chat: {
+            completions: {
+              create: jest.fn().mockImplementation(async function* () {
+                yield {
+                  choices: [{
+                    delta: { content: 'Mocked ' }
+                  }]
+                };
+                yield {
+                  choices: [{
+                    delta: { content: 'reply' }
+                  }]
+                };
+              })
+            }
+          }
+        };
+      })
+    });
+
     provider = new WebLLMProvider();
   });
 
@@ -107,7 +146,6 @@ describe('WebLLMProvider', () => {
 
     it('should handle initialization errors gracefully', async () => {
       // Override loadModel to throw error
-      const MockLoader = require('../../src/model-loader').default;
       MockLoader.getInstance = jest.fn().mockReturnValue({
         loadModel: jest.fn().mockRejectedValue(new Error('Failed to load model'))
       });
@@ -156,7 +194,6 @@ describe('WebLLMProvider', () => {
 
     it('should clean preambles from response', async () => {
       // Mock a response with preamble
-      const MockLoader = require('../../src/model-loader').default;
       const mockEngine = {
         chat: {
           completions: {
@@ -245,11 +282,10 @@ describe('WebLLMProvider', () => {
 
   describe('Model Fallback Strategy', () => {
     it('should attempt fallback models on failure', async () => {
-      const MockLoader = require('../../src/model-loader').default;
       let attempts = 0;
 
       MockLoader.getInstance = jest.fn().mockReturnValue({
-        loadModel: jest.fn().mockImplementation(async (model: string) => {
+        loadModel: jest.fn().mockImplementation(async (_model: string) => {
           attempts++;
           if (attempts === 1) {
             throw new Error('First model failed');
@@ -320,6 +356,50 @@ describe('WebLLMProvider', () => {
       await expect(
         provider.generateReply('system', 'user')
       ).rejects.toThrow('Network error');
+    });
+  });
+
+  describe('Engine Status', () => {
+    it('should return engine status when initialized', async () => {
+      await provider.initialize();
+
+      const status = provider.getEngineStatus();
+
+      expect(status).toEqual({
+        ready: true,
+        model: expect.stringContaining('Llama'),
+        cached: true
+      });
+    });
+
+    it('should return not ready status when not initialized', () => {
+      const uninitializedProvider = new WebLLMProvider();
+
+      const status = uninitializedProvider.getEngineStatus();
+
+      expect(status).toEqual({
+        ready: false,
+        model: expect.stringContaining('Llama'),
+        cached: true
+      });
+    });
+
+    it('should reflect custom model in status', () => {
+      const customProvider = new WebLLMProvider({
+        model: 'gemma-2-2b-it-q4f16_1-MLC'
+      });
+
+      const status = customProvider.getEngineStatus();
+
+      expect(status.model).toBe('gemma-2-2b-it-q4f16_1-MLC');
+    });
+
+    it('should update status after dispose', async () => {
+      await provider.initialize();
+      expect(provider.getEngineStatus().ready).toBe(true);
+
+      await provider.dispose();
+      expect(provider.getEngineStatus().ready).toBe(false);
     });
   });
 });
