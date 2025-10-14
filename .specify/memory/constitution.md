@@ -3,18 +3,38 @@ Privacy-Focused AI Chrome Extension Architecture
 
 ## Core Principles
 
-### I. Privacy-First Architecture (NON-NEGOTIABLE)
-All AI inference MUST occur locally on the user's device. No user data, LinkedIn content, or generated replies may be transmitted to external servers.
+### I. Privacy-First Architecture with Optional External APIs (AMENDED)
+The extension prioritizes local AI inference by default but supports optional external API usage with explicit user consent and clear privacy warnings.
 
-**Requirements:**
-- WebLLM for on-device AI processing only
-- No external API calls for user content or inference
+**Local-First Mode (DEFAULT):**
+- WebLLM for on-device AI processing by default
+- No external API calls without explicit user opt-in
 - Chrome storage limited to user settings and preferences
-- LinkedIn DOM content must never leave the browser context
+- LinkedIn DOM content stays in browser context
 - All model downloads through WebLLM's CDN only (models, not data)
 - Content scripts must sanitize data before processing
 
-**Rationale:** Users trust ReplyMate with sensitive professional communications. Privacy is our core value proposition and competitive advantage.
+**External API Mode (OPT-IN ONLY):**
+- User must explicitly select external provider (Claude, Gemini, OpenAI)
+- Clear privacy warning required before first use
+- User must acknowledge that LinkedIn content will be sent to third-party servers
+- API keys stored securely in chrome.storage.sync (encrypted by Chrome)
+- HTTPS-only connections to API endpoints
+- No automatic fallback to external APIs
+- Provider status clearly indicated in UI
+
+**Privacy Requirements:**
+- Default to Local AI on first install
+- Privacy consent dialog must be acknowledged before enabling external APIs
+- Consent stored with timestamp
+- Clear visual indicator when external API is active
+- Option to immediately switch back to Local AI
+- API keys never logged or exposed in console
+
+**Rationale:** While privacy remains our core value with Local AI as default, users may choose external APIs for specific needs (model quality, speed, cost). This choice must be explicit, informed, and reversible. The amendment maintains privacy-first principles while respecting user autonomy.
+
+**Amendment Date:** 2025-10-13
+**Amendment Reason:** User request for multi-provider support while maintaining privacy-first default
 
 ### II. Quality Gates (MANDATORY PRE-COMMIT)
 Every code change must pass all quality gates before merge. Build failures block deployment.
@@ -291,4 +311,4 @@ For day-to-day development questions, consult CLAUDE.md. For architectural decis
 - Repeated violations require architecture review
 - Critical violations (privacy breaches) trigger immediate rollback
 
-**Version**: 1.0.0 | **Ratified**: 2025-10-13 | **Last Amended**: 2025-10-13
+**Version**: 1.1.0 | **Ratified**: 2025-10-13 | **Last Amended**: 2025-10-13 (Principle I: External API Support)
