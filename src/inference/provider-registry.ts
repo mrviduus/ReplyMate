@@ -245,23 +245,30 @@ export class ProviderRegistry {
         this.register('local', MockLocalProvider as any);
       }
     } else if (type === 'claude') {
-      // Will import ClaudeProvider when implemented
-      class MockClaudeProvider implements InferenceProvider {
-        constructor(private config?: ProviderConfig) {}
-        async initialize(): Promise<void> {}
-        async generateReply(systemPrompt: string, userPrompt: string) {
-          return { reply: 'Claude mock reply', provider: 'claude', model: 'mock' };
+      // Import ClaudeProvider
+      try {
+        const { ClaudeProvider } = require('./providers/claude-provider');
+        this.register('claude', ClaudeProvider);
+      } catch (error) {
+        console.warn('ClaudeProvider not available:', error);
+        // Fall back to mock for testing
+        class MockClaudeProvider implements InferenceProvider {
+          constructor(private config?: ProviderConfig) {}
+          async initialize(): Promise<void> {}
+          async generateReply(systemPrompt: string, userPrompt: string) {
+            return { reply: 'Claude mock reply', provider: 'claude', model: 'mock' };
+          }
+          async validateApiKey(key: string): Promise<boolean> {
+            return key.startsWith('sk-ant-');
+          }
+          isReady(): boolean { return true; }
+          getProviderName(): string { return 'Claude API'; }
+          getModelName(): string { return 'claude-3-5-sonnet'; }
+          getProviderType(): ProviderType { return 'claude'; }
+          async dispose(): Promise<void> {}
         }
-        async validateApiKey(key: string): Promise<boolean> {
-          return key.startsWith('sk-ant-');
-        }
-        isReady(): boolean { return true; }
-        getProviderName(): string { return 'Claude API'; }
-        getModelName(): string { return 'claude-3-5-sonnet'; }
-        getProviderType(): ProviderType { return 'claude'; }
-        async dispose(): Promise<void> {}
+        this.register('claude', MockClaudeProvider as any);
       }
-      this.register('claude', MockClaudeProvider as any);
     } else if (type === 'gemini') {
       // Will import GeminiProvider when implemented
       class MockGeminiProvider implements InferenceProvider {
