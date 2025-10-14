@@ -189,7 +189,7 @@ describe('InferenceProvider Interface', () => {
       try {
         await invalidProvider.initialize();
       } catch (error) {
-        expect(error.message).toBe(ProviderError.INVALID_KEY);
+        expect((error as Error).message).toBe(ProviderError.INVALID_KEY);
       }
     });
   });
