@@ -221,23 +221,29 @@ export class ProviderRegistry {
       return;
     }
 
-    // This will be replaced with actual imports when providers are implemented
-    // For now, we'll create mock providers for testing
+    // Import actual provider implementations
     if (type === 'local') {
-      // Will import WebLLMProvider when implemented
-      class MockLocalProvider implements InferenceProvider {
-        async initialize(): Promise<void> {}
-        async generateReply(systemPrompt: string, userPrompt: string) {
-          return { reply: 'Local mock reply', provider: 'local', model: 'mock' };
+      // Import WebLLMProvider
+      try {
+        const { WebLLMProvider } = require('./providers/webllm-provider');
+        this.register('local', WebLLMProvider);
+      } catch (error) {
+        console.warn('WebLLMProvider not available:', error);
+        // Fall back to mock for testing
+        class MockLocalProvider implements InferenceProvider {
+          async initialize(): Promise<void> {}
+          async generateReply(systemPrompt: string, userPrompt: string) {
+            return { reply: 'Local mock reply', provider: 'local', model: 'mock' };
+          }
+          async validateApiKey(key: string): Promise<boolean> { return true; }
+          isReady(): boolean { return true; }
+          getProviderName(): string { return 'Local AI'; }
+          getModelName(): string { return 'mock-model'; }
+          getProviderType(): ProviderType { return 'local'; }
+          async dispose(): Promise<void> {}
         }
-        async validateApiKey(key: string): Promise<boolean> { return true; }
-        isReady(): boolean { return true; }
-        getProviderName(): string { return 'Local AI'; }
-        getModelName(): string { return 'mock-model'; }
-        getProviderType(): ProviderType { return 'local'; }
-        async dispose(): Promise<void> {}
+        this.register('local', MockLocalProvider as any);
       }
-      this.register('local', MockLocalProvider as any);
     } else if (type === 'claude') {
       // Will import ClaudeProvider when implemented
       class MockClaudeProvider implements InferenceProvider {
