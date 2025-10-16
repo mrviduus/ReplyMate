@@ -12,11 +12,32 @@ const RECOMMENDED_MODELS = [
   "Qwen2.5-0.5B-Instruct-q4f16_1-MLC",
 ];
 
-// Smart model selection for background service
+// Smart model selection for background service based on device capabilities
 function getOptimalBackgroundModel(): string {
-  // BALANCED: Good quality with reliable browser compatibility
-  // 1B model provides excellent results without performance issues
-  return "Llama-3.2-1B-Instruct-q4f16_1-MLC"; // Optimal balance for LinkedIn
+  // Check device memory if available
+  const deviceMemory = (navigator as any).deviceMemory; // In GB
+  const hardwareConcurrency = navigator.hardwareConcurrency || 4; // CPU cores
+
+  console.log(`📊 Device Info: ${deviceMemory}GB RAM, ${hardwareConcurrency} cores`);
+
+  // Model tiers based on device capability
+  const modelTiers = {
+    high: "Llama-3.2-3B-Instruct-q4f16_1-MLC",     // 3B: Highest quality (requires 8GB+ RAM)
+    medium: "Llama-3.2-1B-Instruct-q4f16_1-MLC",   // 1B: Balanced (4-8GB RAM)
+    low: "Qwen2.5-0.5B-Instruct-q4f16_1-MLC"       // 0.5B: Fast fallback (<4GB RAM)
+  };
+
+  // Device-based selection
+  if (deviceMemory >= 8 && hardwareConcurrency >= 8) {
+    console.log('🚀 High-end device detected: Using 3B model for best quality');
+    return modelTiers.high;
+  } else if (deviceMemory >= 4 || hardwareConcurrency >= 4) {
+    console.log('⚖️ Mid-range device detected: Using 1B balanced model');
+    return modelTiers.medium;
+  } else {
+    console.log('⚡ Low-end device detected: Using 0.5B fast model');
+    return modelTiers.low;
+  }
 }
 
 // Keep track of the AI engine using optimized loader
@@ -26,11 +47,176 @@ let engineInitialized = false;
 let engineInitializing = false;
 let currentModel = getOptimalBackgroundModel(); // Use fast model initially
 
+// AI generation parameters - Optimized defaults for better quality
+let aiTemperature = 0.85; // Higher creativity
+let aiMaxTokens = 150; // Longer, more detailed responses
+
+// Load AI parameters from storage on startup
+async function loadAIParameters(): Promise<void> {
+  try {
+    const result = await chrome.storage.sync.get(['aiTemperature', 'aiMaxTokens']);
+    aiTemperature = result.aiTemperature || 0.85; // Optimized default
+    aiMaxTokens = result.aiMaxTokens || 150; // Optimized default
+    console.log(`🎛️ AI Parameters loaded: temperature=${aiTemperature}, maxTokens=${aiMaxTokens}`);
+  } catch (error) {
+    console.error('Failed to load AI parameters, using defaults:', error);
+  }
+}
+
+// Initialize parameters on script load
+loadAIParameters();
+
+// Performance telemetry
+interface GenerationMetrics {
+  startTime: number;
+  modelLoadTime?: number;
+  inferenceTime?: number;
+  totalTime?: number;
+  tokenCount?: number;
+  wordCount?: number;
+  cacheHit: boolean;
+  retryAttempted: boolean;
+  validationScore?: number;
+  modelUsed: string;
+}
+
+// Log performance metrics
+function logPerformanceMetrics(metrics: GenerationMetrics): void {
+  const totalTime = (metrics.totalTime || 0).toFixed(0);
+  const inferenceTime = (metrics.inferenceTime || 0).toFixed(0);
+
+  console.log(`
+╔════════════════════════════════════════════════════════════╗
+║                   PERFORMANCE METRICS                      ║
+╠════════════════════════════════════════════════════════════╣
+║ Model: ${metrics.modelUsed.padEnd(44)} ║
+║ Cache Hit: ${(metrics.cacheHit ? '✅ YES' : '❌ NO').padEnd(41)} ║
+║ Total Time: ${totalTime.padEnd(10)} ms                              ║
+║ Inference Time: ${inferenceTime.padEnd(6)} ms                              ║
+║ Word Count: ${String(metrics.wordCount || 0).padEnd(10)}                          ║
+║ Validation Score: ${String(metrics.validationScore || 'N/A').padEnd(6)}/100                       ║
+║ Retry Attempted: ${(metrics.retryAttempted ? '🔄 YES' : '✓ NO').padEnd(38)} ║
+╚════════════════════════════════════════════════════════════╝
+  `);
+
+  // Also store metrics for analysis
+  chrome.storage.local.get(['performanceMetrics'], (result) => {
+    const allMetrics = result.performanceMetrics || [];
+    allMetrics.push({
+      timestamp: Date.now(),
+      ...metrics
+    });
+
+    // Keep only last 100 metrics
+    if (allMetrics.length > 100) {
+      allMetrics.shift();
+    }
+
+    chrome.storage.local.set({ performanceMetrics: allMetrics });
+  });
+}
+
+// Response validation function
+interface ValidationResult {
+  valid: boolean;
+  reason?: 'too_short' | 'too_long' | 'no_punctuation' | 'has_preamble' | 'generic';
+  score?: number; // 0-100 quality score
+}
+
+function validateReplyQuality(reply: string): ValidationResult {
+  const trimmedReply = reply.trim();
+  const wordCount = trimmedReply.split(/\s+/).length;
+  const sentenceCount = (trimmedReply.match(/[.!?]+/g) || []).length;
+
+  // Check minimum length
+  if (wordCount < 10) {
+    return { valid: false, reason: 'too_short', score: 20 };
+  }
+
+  // Check maximum length (allow up to 80 words for detailed responses)
+  if (wordCount > 80) {
+    return { valid: false, reason: 'too_long', score: 40 };
+  }
+
+  // Check for proper punctuation
+  if (!/[.!?]$/.test(trimmedReply)) {
+    return { valid: false, reason: 'no_punctuation', score: 50 };
+  }
+
+  // Check for common preambles
+  const preamblePatterns = [
+    /^here['']?s\s/i,
+    /^here\s+is\s/i,
+    /^this\s+is\s/i,
+    /^i['']?ve\s+rewritten/i,
+    /^response:/i,
+    /^reply:/i
+  ];
+
+  for (const pattern of preamblePatterns) {
+    if (pattern.test(trimmedReply)) {
+      return { valid: false, reason: 'has_preamble', score: 60 };
+    }
+  }
+
+  // Check for generic responses
+  const genericPatterns = [
+    /^(great|nice|good|excellent)\s+(post|share|article)[!.]/i,
+    /^thanks?\s+for\s+sharing[!.]/i,
+    /^(totally|completely)\s+agree[!.]/i
+  ];
+
+  for (const pattern of genericPatterns) {
+    if (pattern.test(trimmedReply)) {
+      return { valid: false, reason: 'generic', score: 45 };
+    }
+  }
+
+  // Calculate quality score
+  let score = 70; // Base score
+
+  // Bonus for questions (engagement)
+  if (trimmedReply.includes('?')) score += 10;
+
+  // Bonus for specific data/numbers
+  if (/\d+(%|x|\s+(percent|times|increase|decrease))/i.test(trimmedReply)) score += 10;
+
+  // Bonus for optimal length (15-40 words)
+  if (wordCount >= 15 && wordCount <= 40) score += 10;
+
+  return { valid: true, score: Math.min(100, score) };
+}
+
+// Few-shot examples for better AI learning
+const FEW_SHOT_EXAMPLES = `
+EXAMPLE 1:
+Post: "Just launched our new product after 6 months of development!"
+Reply: "The timing couldn't be better given the Q4 market trends. What was the biggest technical challenge your team overcame during development?"
+
+EXAMPLE 2:
+Post: "Remote work is killing company culture."
+Reply: "Interesting perspective. We've actually seen the opposite—our async standups improved transparency by 40%. What specific cultural elements are you seeing decline?"
+
+EXAMPLE 3:
+Post: "AI will replace 80% of jobs in the next 5 years."
+Reply: "That timeline seems aggressive based on current adoption curves. I've found AI augments rather than replaces roles—what industries are you seeing this happen fastest?"
+
+EXAMPLE 4:
+Post: "Finally hit our Q3 revenue target! Team effort pays off."
+Reply: "Congrats on the milestone! Were there any unexpected strategies that moved the needle more than anticipated?"
+
+EXAMPLE 5:
+Post: "The key to successful leadership is transparency and communication."
+Reply: "This resonates strongly. How do you balance transparency with keeping strategic plans confidential during competitive periods?"
+`;
+
 // Enhanced default prompts for better LinkedIn engagement
 const DEFAULT_PROMPTS = {
   withComments: `You are a LinkedIn engagement expert. Respond DIRECTLY with the reply text only - no preambles, no explanations.
 
 CRITICAL: Output 1-2 impactful sentences (maximum 40 words total). Start immediately with your response.
+
+${FEW_SHOT_EXAMPLES}
 
 SMART ANALYSIS:
 - Study the top-performing comments' tone, style, and engagement patterns
@@ -53,6 +239,8 @@ ENGAGEMENT MULTIPLIERS:
   standard: `You are a LinkedIn expert. Respond DIRECTLY with the reply text only - no preambles, no explanations.
 
 CRITICAL: Output 1-2 impactful sentences (maximum 40 words total). Start immediately with your response.
+
+${FEW_SHOT_EXAMPLES}
 
 HIGH-IMPACT REPLY FORMULA:
 1. Hook: Start with something attention-grabbing ("Actually...", "This reminds me...", "What's interesting...")
@@ -151,16 +339,29 @@ async function ensureEngine(): Promise<MLCEngineInterface> {
   console.log(`🚀 Initializing background AI engine with optimized loader`);
 
   try {
-    // Check network connectivity first (but don't fail if it doesn't work)
-    await checkNetworkConnectivity();
+    // Parallel initialization: Check network AND cache status simultaneously
+    const initStartTime = performance.now();
 
-    // Use BALANCED model for LinkedIn professional replies
-    // 1B model: Excellent quality with stable performance
-    currentModel = getOptimalBackgroundModel(); // Use 1B model
-    console.log('⚖️ Using optimal model for LinkedIn:', currentModel);
+    // Use device-optimized model selection
+    currentModel = getOptimalBackgroundModel();
+    console.log('🎯 Using optimal model for LinkedIn:', currentModel);
+
+    // Run network check and cache check in parallel
+    const [networkResult, cacheResult] = await Promise.allSettled([
+      checkNetworkConnectivity(),
+      checkModelCacheStatus(currentModel)
+    ]);
+
+    // Log parallel results
+    const initCheckTime = performance.now() - initStartTime;
+    console.log(`⚡ Parallel init checks completed in ${initCheckTime.toFixed(0)}ms`);
+
+    if (networkResult.status === 'rejected') {
+      console.warn('⚠️ Network check failed, but continuing with model load');
+    }
 
     // Track if this is first load
-    const isFirstLoad = !(await checkModelCacheStatus(currentModel));
+    const isFirstLoad = cacheResult.status === 'fulfilled' ? !cacheResult.value : true;
 
     // Send initial loading message
     sendProgressToAllTabs({
@@ -521,6 +722,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return false;
   }
 
+  if (request.action === 'updateAIParameters') {
+    console.log('AI parameters update requested:', request);
+    if (typeof request.temperature === 'number') {
+      aiTemperature = request.temperature;
+    }
+    if (typeof request.maxTokens === 'number') {
+      aiMaxTokens = request.maxTokens;
+    }
+    console.log(`✅ AI Parameters updated: temperature=${aiTemperature}, maxTokens=${aiMaxTokens}`);
+    sendResponse({ success: true, temperature: aiTemperature, maxTokens: aiMaxTokens });
+    return false;
+  }
+
   if (request.action === 'initializeModel') {
     console.log('Manual model initialization requested');
     ensureEngine()
@@ -545,15 +759,25 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 async function handleLinkedInReplyWithComments(
-  postContent: string, 
+  postContent: string,
   topComments: Array<{text: string, likeCount: number}>,
   sendResponse: (response: any) => void
 ) {
   console.log('🟢 STEP 5: handleLinkedInReplyWithComments started');
-  
+
+  // Initialize performance metrics
+  const metrics: GenerationMetrics = {
+    startTime: performance.now(),
+    cacheHit: await checkModelCacheStatus(currentModel),
+    retryAttempted: false,
+    modelUsed: currentModel
+  };
+
   try {
     console.log('🟢 STEP 5A: Ensuring engine...');
+    const engineStartTime = performance.now();
     const engine = await ensureEngine();
+    metrics.modelLoadTime = performance.now() - engineStartTime;
     console.log('🟢 STEP 5B: Engine ready');
     
     console.log('🟢 STEP 5C: Getting user prompt for withComments...');
@@ -602,13 +826,15 @@ Write your reply directly (no preambles):`;
     ];
 
     console.log('🟢 STEP 5F: Starting AI generation...');
-    
+    console.log(`🎛️ Using parameters: temperature=${aiTemperature}, maxTokens=${aiMaxTokens}`);
+
+    const inferenceStartTime = performance.now();
     let reply = "";
     const completion = await engine.chat.completions.create({
       stream: true,
       messages: messages,
-      max_tokens: 80, // Increased for better quality (1-2 sentences)
-      temperature: 0.7,
+      max_tokens: aiMaxTokens, // User-configurable
+      temperature: aiTemperature, // User-configurable
       top_p: 0.9,
       stop: ["\n\n", "\n\n\n"] // Only stop on double newlines
     });
@@ -656,12 +882,60 @@ Write your reply directly (no preambles):`;
     // Limit to 1-2 sentences for quality
     const sentences = cleanedReply.split(/[.!?]+/).filter(s => s.trim().length > 0);
     const maxSentences = sentences.slice(0, 2).join('. ');
-    const finalReply = maxSentences.trim() + (cleanedReply.endsWith('?') ? '' : '.');
-    
+    let finalReply = maxSentences.trim() + (cleanedReply.endsWith('?') ? '' : '.');
+
+    // Validate reply quality
+    const validation = validateReplyQuality(finalReply);
+    console.log('🟢 STEP 5G: Validation result:', validation);
+    metrics.validationScore = validation.score;
+    metrics.inferenceTime = performance.now() - inferenceStartTime;
+
+    // If quality is low, retry once with adjusted temperature
+    if (!validation.valid && validation.score! < 60) {
+      console.log(`⚠️ Low quality reply (${validation.reason}), retrying with higher temperature...`);
+      metrics.retryAttempted = true;
+
+      // Retry with higher temperature for more creativity
+      const retryCompletion = await engine.chat.completions.create({
+        stream: true,
+        messages: messages,
+        max_tokens: aiMaxTokens,
+        temperature: Math.min(1.0, aiTemperature + 0.15), // Increase temperature
+        top_p: 0.9,
+        stop: ["\n\n", "\n\n\n"]
+      });
+
+      let retryReply = "";
+      for await (const chunk of retryCompletion) {
+        const delta = chunk.choices[0]?.delta?.content;
+        if (delta) retryReply += delta;
+      }
+
+      const retryCleanedReply = cleanReply(retryReply);
+      const retrySentences = retryCleanedReply.split(/[.!?]+/).filter(s => s.trim().length > 0);
+      const retryMaxSentences = retrySentences.slice(0, 2).join('. ');
+      const retryFinalReply = retryMaxSentences.trim() + (retryCleanedReply.endsWith('?') ? '' : '.');
+
+      const retryValidation = validateReplyQuality(retryFinalReply);
+      console.log('🔄 Retry validation:', retryValidation);
+
+      // Use retry if better, otherwise keep original
+      if (retryValidation.valid || (retryValidation.score! > validation.score!)) {
+        finalReply = retryFinalReply;
+        console.log('✅ Using retry result (better quality)');
+      }
+    }
+
     console.log('🟢 STEP 5G: Generation complete:', finalReply);
-    console.log('🟢 Word count:', finalReply.split(' ').length);
-    
-    sendResponse({ 
+
+    // Finalize metrics
+    metrics.totalTime = performance.now() - metrics.startTime;
+    metrics.wordCount = finalReply.split(/\s+/).length;
+
+    // Log performance
+    logPerformanceMetrics(metrics);
+
+    sendResponse({
       reply: finalReply,
       basedOnComments: true,
       commentCount: topComments.length
@@ -678,10 +952,20 @@ Write your reply directly (no preambles):`;
 
 async function handleLinkedInReply(postContent: string, sendResponse: (response: any) => void) {
   console.log('🟢 STEP 5: handleLinkedInReply started');
-  
+
+  // Initialize performance metrics
+  const metrics: GenerationMetrics = {
+    startTime: performance.now(),
+    cacheHit: await checkModelCacheStatus(currentModel),
+    retryAttempted: false,
+    modelUsed: currentModel
+  };
+
   try {
     console.log('🟢 STEP 5A: Ensuring engine...');
+    const engineStartTime = performance.now();
     const engine = await ensureEngine();
+    metrics.modelLoadTime = performance.now() - engineStartTime;
     console.log('🟢 STEP 5B: Engine ready');
     
     console.log('🟢 STEP 5C: Getting user prompt for standard...');
@@ -727,13 +1011,15 @@ Write your reply directly (no preambles):`;
     ];
 
     console.log('🟢 STEP 5F: Starting AI generation...');
+    console.log(`🎛️ Using parameters: temperature=${aiTemperature}, maxTokens=${aiMaxTokens}`);
 
+    const inferenceStartTime = performance.now();
     let reply = "";
     const completion = await engine.chat.completions.create({
       stream: true,
       messages: messages,
-      max_tokens: 80, // Increased for better quality (1-2 sentences)
-      temperature: 0.7,
+      max_tokens: aiMaxTokens, // User-configurable
+      temperature: aiTemperature, // User-configurable
       top_p: 0.9,
       stop: ["\n\n", "\n\n\n"] // Only stop on double newlines
     });
@@ -781,11 +1067,59 @@ Write your reply directly (no preambles):`;
     // Limit to 1-2 sentences for quality
     const sentences = cleanedReply.split(/[.!?]+/).filter(s => s.trim().length > 0);
     const maxSentences = sentences.slice(0, 2).join('. ');
-    const finalReply = maxSentences.trim() + (cleanedReply.endsWith('?') ? '' : '.');
-    
+    let finalReply = maxSentences.trim() + (cleanedReply.endsWith('?') ? '' : '.');
+
+    // Validate reply quality
+    const validation = validateReplyQuality(finalReply);
+    console.log('🟢 STEP 5G: Validation result:', validation);
+    metrics.validationScore = validation.score;
+    metrics.inferenceTime = performance.now() - inferenceStartTime;
+
+    // If quality is low, retry once with adjusted temperature
+    if (!validation.valid && validation.score! < 60) {
+      console.log(`⚠️ Low quality reply (${validation.reason}), retrying with higher temperature...`);
+      metrics.retryAttempted = true;
+
+      // Retry with higher temperature for more creativity
+      const retryCompletion = await engine.chat.completions.create({
+        stream: true,
+        messages: messages,
+        max_tokens: aiMaxTokens,
+        temperature: Math.min(1.0, aiTemperature + 0.15), // Increase temperature
+        top_p: 0.9,
+        stop: ["\n\n", "\n\n\n"]
+      });
+
+      let retryReply = "";
+      for await (const chunk of retryCompletion) {
+        const delta = chunk.choices[0]?.delta?.content;
+        if (delta) retryReply += delta;
+      }
+
+      const retryCleanedReply = cleanReply(retryReply);
+      const retrySentences = retryCleanedReply.split(/[.!?]+/).filter(s => s.trim().length > 0);
+      const retryMaxSentences = retrySentences.slice(0, 2).join('. ');
+      const retryFinalReply = retryMaxSentences.trim() + (retryCleanedReply.endsWith('?') ? '' : '.');
+
+      const retryValidation = validateReplyQuality(retryFinalReply);
+      console.log('🔄 Retry validation:', retryValidation);
+
+      // Use retry if better, otherwise keep original
+      if (retryValidation.valid || (retryValidation.score! > validation.score!)) {
+        finalReply = retryFinalReply;
+        console.log('✅ Using retry result (better quality)');
+      }
+    }
+
     console.log('🟢 STEP 5G: Generation complete:', finalReply);
-    console.log('🟢 Word count:', finalReply.split(' ').length);
-    
+
+    // Finalize metrics
+    metrics.totalTime = performance.now() - metrics.startTime;
+    metrics.wordCount = finalReply.split(/\s+/).length;
+
+    // Log performance
+    logPerformanceMetrics(metrics);
+
     sendResponse({ reply: finalReply });
     
   } catch (error) {

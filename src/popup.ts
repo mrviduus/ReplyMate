@@ -66,6 +66,15 @@ const currentModelName = getElementAndCheck("currentModelName");
 const modelPerformance = getElementAndCheck("modelPerformance");
 const memoryUsage = getElementAndCheck("memoryUsage");
 
+// UI Elements - AI Parameters
+const temperatureSlider = getElementAndCheck("temperatureSlider") as HTMLInputElement;
+const temperatureValue = getElementAndCheck("temperatureValue");
+const maxTokensSlider = getElementAndCheck("maxTokensSlider") as HTMLInputElement;
+const maxTokensValue = getElementAndCheck("maxTokensValue");
+const saveParametersBtn = getElementAndCheck("saveParameters") as HTMLButtonElement;
+const resetParametersBtn = getElementAndCheck("resetParameters") as HTMLButtonElement;
+const parameterStatus = getElementAndCheck("parameterStatus");
+
 // UI Elements - Settings
 const settingsLoading = getElementAndCheck("settingsLoading");
 const settingsContent = getElementAndCheck("settingsContent");
@@ -90,6 +99,10 @@ let defaultPrompts = {
   standard: '',
   withComments: ''
 };
+
+// Default AI parameters - Optimized for better quality
+const DEFAULT_TEMPERATURE = 0.85; // Higher for more creative/varied responses
+const DEFAULT_MAX_TOKENS = 150; // Allows 3-4 quality sentences
 
 // Update model status UI
 function updateModelStatus(status: ModelStatus, message: string, details?: string) {
@@ -393,6 +406,119 @@ async function reinitializeModel() {
   });
 }
 
+// Load AI parameters from storage
+async function loadParameters() {
+  try {
+    const result = await chrome.storage.sync.get(['aiTemperature', 'aiMaxTokens']);
+
+    const temperature = result.aiTemperature || DEFAULT_TEMPERATURE;
+    const maxTokens = result.aiMaxTokens || DEFAULT_MAX_TOKENS;
+
+    if (temperatureSlider && temperatureValue) {
+      temperatureSlider.value = temperature.toString();
+      temperatureValue.textContent = temperature.toFixed(2);
+    }
+
+    if (maxTokensSlider && maxTokensValue) {
+      maxTokensSlider.value = maxTokens.toString();
+      maxTokensValue.textContent = maxTokens.toString();
+    }
+  } catch (error) {
+    console.error('Failed to load AI parameters:', error);
+  }
+}
+
+// Save AI parameters to storage
+async function saveParameters() {
+  if (!temperatureSlider || !maxTokensSlider) return;
+
+  const temperature = parseFloat(temperatureSlider.value);
+  const maxTokens = parseInt(maxTokensSlider.value, 10);
+
+  if (saveParametersBtn) saveParametersBtn.disabled = true;
+  if (resetParametersBtn) resetParametersBtn.disabled = true;
+  showParameterStatus('Saving parameters...', 'info');
+
+  try {
+    await chrome.storage.sync.set({
+      aiTemperature: temperature,
+      aiMaxTokens: maxTokens
+    });
+
+    // Notify background script to update parameters
+    chrome.runtime.sendMessage({
+      action: 'updateAIParameters',
+      temperature: temperature,
+      maxTokens: maxTokens
+    }, (response) => {
+      if (saveParametersBtn) saveParametersBtn.disabled = false;
+      if (resetParametersBtn) resetParametersBtn.disabled = false;
+
+      if (response?.success) {
+        showParameterStatus('✅ Parameters saved successfully!', 'success');
+      } else {
+        showParameterStatus('Failed to save parameters', 'error');
+      }
+    });
+  } catch (error) {
+    console.error('Failed to save parameters:', error);
+    if (saveParametersBtn) saveParametersBtn.disabled = false;
+    if (resetParametersBtn) resetParametersBtn.disabled = false;
+    showParameterStatus('Failed to save parameters', 'error');
+  }
+}
+
+// Reset AI parameters to defaults
+async function resetParameters() {
+  if (!confirm('Reset AI parameters to default values?')) {
+    return;
+  }
+
+  try {
+    await chrome.storage.sync.set({
+      aiTemperature: DEFAULT_TEMPERATURE,
+      aiMaxTokens: DEFAULT_MAX_TOKENS
+    });
+
+    if (temperatureSlider && temperatureValue) {
+      temperatureSlider.value = DEFAULT_TEMPERATURE.toString();
+      temperatureValue.textContent = DEFAULT_TEMPERATURE.toFixed(2);
+    }
+
+    if (maxTokensSlider && maxTokensValue) {
+      maxTokensSlider.value = DEFAULT_MAX_TOKENS.toString();
+      maxTokensValue.textContent = DEFAULT_MAX_TOKENS.toString();
+    }
+
+    // Notify background script
+    chrome.runtime.sendMessage({
+      action: 'updateAIParameters',
+      temperature: DEFAULT_TEMPERATURE,
+      maxTokens: DEFAULT_MAX_TOKENS
+    });
+
+    showParameterStatus('✅ Parameters reset to defaults', 'success');
+  } catch (error) {
+    console.error('Failed to reset parameters:', error);
+    showParameterStatus('Failed to reset parameters', 'error');
+  }
+}
+
+// Show parameter status message
+function showParameterStatus(message: string, type: 'success' | 'error' | 'info') {
+  if (!parameterStatus) return;
+
+  parameterStatus.innerHTML = message;
+  parameterStatus.className = `status-message ${type}`;
+  parameterStatus.style.display = 'block';
+
+  setTimeout(() => {
+    if (parameterStatus) {
+      parameterStatus.style.display = 'none';
+    }
+  }, 3000);
+}
+
 // Load settings from storage
 async function loadSettings() {
   if (!settingsLoading || !settingsContent) return;
@@ -545,11 +671,35 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Setup model selector first
   await setupModelSelector();
 
+  // Load AI parameters
+  await loadParameters();
+
   // Load settings
   await loadSettings();
 
   // Check model status immediately to sync UI
   checkModelStatus();
+
+  // Setup event handlers for AI parameters
+  if (temperatureSlider && temperatureValue) {
+    temperatureSlider.addEventListener('input', () => {
+      temperatureValue.textContent = parseFloat(temperatureSlider.value).toFixed(2);
+    });
+  }
+
+  if (maxTokensSlider && maxTokensValue) {
+    maxTokensSlider.addEventListener('input', () => {
+      maxTokensValue.textContent = maxTokensSlider.value;
+    });
+  }
+
+  if (saveParametersBtn) {
+    saveParametersBtn.addEventListener('click', saveParameters);
+  }
+
+  if (resetParametersBtn) {
+    resetParametersBtn.addEventListener('click', resetParameters);
+  }
 
   // Setup event handlers
   if (modelSelector) {
