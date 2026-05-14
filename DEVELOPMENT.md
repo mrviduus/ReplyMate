@@ -250,14 +250,13 @@ git push origin main --tags
 ```
 src/
 ├── manifest.json           # Extension manifest
-├── background.ts          # Background service worker  
-├── content.js            # Generic content script
+├── background.ts          # Background service worker
+├── model-loader.ts       # Optimized WebLLM engine loader (singleton)
 ├── linkedin-content.ts   # LinkedIn-specific content script
 ├── popup.html           # Extension popup HTML
 ├── popup.ts            # Extension popup logic
 ├── popup.css          # Extension popup styles
 ├── linkedin-styles.css # LinkedIn integration styles
-├── success-background.ts # Success handling
 └── icons/             # Extension icons
     ├── icon-16.png
     ├── icon-32.png  

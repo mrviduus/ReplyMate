@@ -48,7 +48,6 @@ cp src/manifest.json dist/
 cp src/popup.html dist/
 cp src/popup.css dist/
 cp src/linkedin-styles.css dist/
-cp src/content.js dist/
 cp -r src/icons dist/
 
 # Validate manifest

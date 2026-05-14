@@ -12,7 +12,6 @@ Welcome to the complete documentation for ReplyMate - your AI-powered LinkedIn a
 |----------|-------------|----------|
 | **[📖 User Guide](../USER_GUIDE.md)** | Complete installation and usage instructions | End Users |
 | **[🏗️ Architecture Guide](ARCHITECTURE.md)** | How ReplyMate works (explained simply) | Everyone |
-| **[⚡ Quick Reference](../QUICK_REFERENCE.md)** | Fast commands and shortcuts | All Users |
 
 ## 👩‍💻 Development
 
@@ -27,16 +26,12 @@ Welcome to the complete documentation for ReplyMate - your AI-powered LinkedIn a
 | Document | Description |
 |----------|-------------|
 | **[🏪 Chrome Web Store](guides/CHROME_WEB_STORE.md)** | Publishing guidelines |
-| **[🤖 Smart Reply Implementation](guides/SMART_REPLY_IMPLEMENTATION.md)** | AI reply system details |
-| **[🎯 Custom Prompts](guides/CUSTOM_PROMPTS_FIXED.md)** | Prompt customization guide |
-| **[📈 Improvements Summary](guides/IMPROVEMENTS_SUMMARY.md)** | Recent enhancements |
 
 ## 🛠️ Troubleshooting
 
 | Document | Description |
 |----------|-------------|
 | **[🚨 Troubleshooting Guide](troubleshooting/TROUBLESHOOTING.md)** | Common issues and solutions |
-| **[🔍 Detailed Troubleshooting](troubleshooting/TROUBLESHOOTING_DETAILED.md)** | Advanced problem solving |
 
 ## 🛡️ Privacy & Security
 

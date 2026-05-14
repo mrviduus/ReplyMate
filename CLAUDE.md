@@ -4,133 +4,82 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ReplyMate is a privacy-focused Chrome extension (Manifest V3) that provides AI-powered LinkedIn reply suggestions. It runs entirely locally using WebLLM for AI inference without sending data to external servers.
+ReplyMate is a privacy-focused Chrome extension (Manifest V3) that generates LinkedIn reply suggestions. All inference runs on-device via WebLLM — nothing leaves the browser.
 
-## Essential Commands
+## Commands
 
-### Development
-- `npm run dev` - Start development with hot reload (Parcel)
-- `npm run build` - Production build with webextension config
-- `npm run clean` - Clean build artifacts
+### Build / Dev
+- `npm run dev` — Parcel watch mode against `src/manifest.json` (`@parcel/config-webextension`). Output → `dist/`.
+- `npm run build` — Parcel production build.
+- `npm run build:script` — Full quality-gated build via `./scripts/build.sh` (type-check → lint → `test:ci` → `tsc` → copy assets → manifest validate → size report). Note: this also runs a parallel `tsc` compile to `dist/`, which is separate from the Parcel pipeline.
+- `npm run clean` — Wipes `dist/`, `packages/`, `.parcel-cache/`.
+- `npm run package` / `npm run zip` — `./scripts/package.sh` ZIPs prod + dev builds.
+- `./scripts/version-bump.sh --type {patch|minor|major|custom --version X.Y.Z}` — Bumps `package.json` + `src/manifest.json`, commits, tags.
 
-### Testing
-- `npm test` - Run full test suite (132+ tests)
-- `npm run test:watch` - Run tests in watch mode
-- `npm run test:coverage` - Generate coverage report
-- To run a single test: `npm test -- path/to/test.spec.ts`
+### Test
+- `npm test` — Jest (ts-jest + jsdom), config in `jest.config.js`, setup in `tests/setup.ts` (Chrome API mocks).
+- `npm test -- <file-or-pattern>` — Single file.
+- `npm test -- --testNamePattern="<regex>"` — By test name.
+- `npm test -- --testPathIgnorePatterns=linkedin-integration` — Skip the integration suite (known flaky in some envs).
+- `npm run test:coverage` / `npm run test:ci`.
 
-### Code Quality
-- `npm run lint` - Check code with ESLint (must pass with 0 warnings)
-- `npm run lint:fix` - Auto-fix linting issues
-- `npm run type-check` - TypeScript type checking (strict mode)
-- `npm run format` - Format code with Prettier
-
-### Building & Packaging
-- `npm run build:script` - Full build pipeline with quality checks (./scripts/build.sh)
-- `npm run package` - Create distribution packages
-- `npm run zip` - Build and package in one command
-- `npm run validate-manifest` - Validate manifest.json structure
+### Quality (must pass before commit)
+- `npm run lint` — ESLint on `src/**/*.js` only (max-warnings=0). TS files are not in the default lint script; rely on `type-check` for `.ts`.
+- `npm run type-check` — `tsc --noEmit` with strict mode.
+- `npm run format` / `npm run format:check` — Prettier across `src/**/*.{ts,js,css,html,json}`.
 
 ## Architecture
 
-### Core Components
+### Runtime topology
+```
+LinkedIn page  ──► linkedin-content.ts ──┐
+                                          │  chrome.runtime messages
+popup.html ──► popup.ts ─────────────────┤
+                                          ▼
+                                  background.ts (service worker, type: module)
+                                          │
+                                          ▼
+                                  model-loader.ts (OptimizedModelLoader singleton)
+                                          │
+                                          ▼
+                                  @mlc-ai/web-llm  →  WebGPU / WASM
+```
 
-1. **Background Service Worker (src/background.ts)**
-   - Manages WebLLM AI engine lifecycle
-   - Handles model selection with smart fallbacks
-   - Processes inference requests from content scripts
-   - Contains LinkedIn-specific prompt engineering
+### Critical files
+- `src/background.ts` — Service worker. Owns the AI engine lifecycle (`ensureEngine`), device-tier model selection (`getOptimalBackgroundModel`), prompt assembly (`DEFAULT_PROMPTS` + `FEW_SHOT_EXAMPLES`), reply validation (`validateReplyQuality`), and performance telemetry. Broadcasts model-load progress to all tabs.
+- `src/model-loader.ts` — Singleton wrapper around `CreateMLCEngine` with retry, timeout, preload queue, and a per-model loading-state map. Background always goes through this — do not call `CreateMLCEngine` directly elsewhere.
+- `src/linkedin-content.ts` — `LinkedInReplyMate` class. Mutation-observes the feed, injects "Generate Reply" buttons, extracts post + top-comment text, and pings the worker with `linkedinContentScriptReady` on startup so the worker can warm the engine.
+- `src/popup.ts` + `popup.html` / `popup.css` — Extension popup: model picker, custom-prompt editor, temperature / max-token sliders, manual chat.
 
-2. **LinkedIn Content Script (src/linkedin-content.ts)**
-   - Injects "Generate Reply" buttons into LinkedIn UI
-   - Extracts post/comment content for AI processing
-   - Manages reply generation flow and UI updates
-   - Handles compliance warnings and error states
+### Model tiers (background)
+Device-capability gated in `getOptimalBackgroundModel`:
+- ≥8 GB RAM and ≥8 cores → `Llama-3.2-3B-Instruct-q4f16_1-MLC`
+- ≥4 GB RAM or ≥4 cores → `Llama-3.2-1B-Instruct-q4f16_1-MLC`
+- otherwise → `Qwen2.5-0.5B-Instruct-q4f16_1-MLC`
 
-3. **Popup Interface (src/popup.ts, popup.html)**
-   - Main extension control panel
-   - Model selection and management
-   - Settings and customization for LinkedIn reply generation
+`model-loader.ts` preloads `MODEL_PRIORITIES`-tagged `'high'` models (Qwen2.5-0.5B, Phi-3.5-mini) opportunistically.
 
-### AI Configuration
-- **Library**: @mlc-ai/web-llm v0.2.79
-- **Model Tiers**: Professional (Llama-3.2), Balanced (Qwen2.5), Fast (Gemma-2, Phi-3.5)
-- **Smart Selection**: Automatic model selection based on device capabilities
-- **Local Processing**: All AI inference happens on-device for privacy
+### Message contract (`chrome.runtime.sendMessage` actions)
+- `generateReply` — content script → background (with `postId`, `postContent`, optional comments). Background streams back the reply.
+- `linkedinContentScriptReady` — content script → background, triggers engine warm-up.
+- `getModelsInfo` / `testModel` / `resetModel` — popup → background.
+- `modelLoadProgress` — background → all tabs (broadcast), fields: `progress`, `message`, `stage` (`initializing` | `downloading` | `loading` | `finalizing` | `complete`), `isFirstLoad`.
 
-### Extension Architecture
-- **Manifest V3**: Modern Chrome extension architecture
-- **Content Security Policy**: Strict CSP for security
-- **Message Passing**: Chrome runtime messaging between components
-- **Storage**: Chrome storage API for settings persistence
+### Storage keys
+- `chrome.storage.sync` — `customPrompts` (object: `{ withComments, standard }`), `aiTemperature` (default 0.85), `aiMaxTokens` (default 150), `selectedModel`.
+- `chrome.storage.local` — `model-<modelId>-cached` flag, `performanceMetrics` (rolling last 100), `hasUsedExtension`.
 
-## Development Guidelines
+### Manifest essentials (`src/manifest.json`)
+- Permissions: `storage`, `tabs`, `activeTab`, `windows`, `alarms`.
+- Host permissions: `https://*.linkedin.com/*`.
+- Content script runs at `document_idle` on LinkedIn only.
+- CSP allows `wasm-unsafe-eval` and Hugging Face / `huggingface.co` CDNs for model fetches — keep this in sync when adding new model hosts.
 
-### TypeScript Configuration
-- Target: ES2020
-- Strict mode enabled
-- Module resolution: Node
-- Source maps enabled for debugging
+## LinkedIn integration notes
+Post detection relies on `div[data-id]` containers; reply textareas are `div[contenteditable="true"]`. LinkedIn's DOM shifts often — when buttons stop appearing, check the mutation observer selectors in `linkedin-content.ts` first.
 
-### Testing Approach
-- Framework: Jest with ts-jest and jsdom
-- Setup: tests/setup.ts provides Chrome API mocks
-- Coverage: Collect from src/**/*.{ts,tsx}
-- Run specific tests: `npm test -- --testNamePattern="pattern"`
-
-### Build Process (scripts/build.sh)
-1. Validates dependencies
-2. Runs TypeScript type checking
-3. Executes ESLint checks
-4. Runs test suite
-5. Compiles TypeScript
-6. Copies static assets to dist/
-7. Validates manifest.json
-8. Reports build size
-
-### Code Quality Requirements
-- TypeScript strict mode must pass
-- ESLint must report 0 warnings
-- All tests must pass before build
-- Prettier formatting must be applied
-
-## Key Directories
-
-- `src/` - Main source code (TypeScript)
-- `tests/` - Test files with Chrome API mocks
-- `dist/` - Build output (git-ignored)
-- `scripts/` - Build and packaging automation
-- `docs/` - Architecture and troubleshooting guides
-- `icons/` - Extension icons (multiple sizes)
-
-## Working with LinkedIn Integration
-
-The extension specifically targets LinkedIn's DOM structure:
-- Post detection: `div[data-id]` containers
-- Comment forms: `div.comments-comment-box`
-- Reply textareas: `div[contenteditable="true"]`
-- Button injection points vary by post type
-
-When modifying LinkedIn integration:
-1. Test on different post types (articles, posts, comments)
-2. Handle dynamic content loading
-3. Respect LinkedIn's rate limits
-4. Test with various LinkedIn UI themes
-
-## Chrome Extension Specifics
-
-### Permissions Required
-- storage: Settings persistence
-- activeTab: Content script injection
-- Host permissions: https://www.linkedin.com/*
-
-### Message Types
-- `generateReply`: Request AI reply generation
-- `getModelsInfo`: Fetch available models
-- `testModel`: Test model functionality
-- `resetModel`: Clear current model
-
-### Storage Keys
-- `selectedModel`: Current AI model
-- `customPrompt`: User's custom prompt
-- `settings`: Extension configuration
+## Conventions
+- TypeScript strict mode is non-negotiable; `any` should be justified.
+- The optimized model loader is the single entry point for engine creation — don't bypass it.
+- `validateReplyQuality` scores 0–100 and gates retries; preserve its rules (length, no preambles, no generic praise) when changing prompts.
+- Tests use Chrome API mocks from `tests/setup.ts`; new chrome.* usage may need a mock there.
