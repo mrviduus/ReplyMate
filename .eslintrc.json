@@ -25,20 +25,26 @@
   },
   "overrides": [
     {
-      "files": ["**/*.test.ts", "**/*.spec.ts"],
-      "env": {
-        "jest": true
+      "files": ["**/*.ts"],
+      "parser": "@typescript-eslint/parser",
+      "plugins": ["@typescript-eslint"],
+      "extends": [
+        "eslint:recommended",
+        "plugin:@typescript-eslint/recommended"
+      ],
+      "rules": {
+        "no-unused-vars": "off",
+        "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
+        "@typescript-eslint/no-explicit-any": "warn"
       }
     },
     {
-      "files": ["src/content.js"],
+      "files": ["**/*.test.ts", "**/*.spec.ts"],
       "env": {
-        "browser": true,
-        "webextensions": true
+        "jest": true
       },
-      "parserOptions": {
-        "ecmaVersion": 2021,
-        "sourceType": "script"
+      "rules": {
+        "@typescript-eslint/no-explicit-any": "off"
       }
     }
   ],
