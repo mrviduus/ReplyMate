@@ -27,7 +27,7 @@ description: "Task list for SSI Growth Mode (ReplyMate v0.4.0) — v1.1"
 
 ## Pre-flight
 
-- [ ] **T000** — Create branch `001-ssi-growth-mode` from `main`. Run `npm install` to ensure baseline. Confirm `npm test`, `npm run lint`, `npm run type-check`, `npm run build` all pass on the branch.
+- [x] **T000** — Create branch `001-ssi-growth-mode` from `main`. Run `npm install` to ensure baseline. Confirm `npm test`, `npm run lint`, `npm run type-check`, `npm run build` all pass on the branch.
 
 ---
 
@@ -35,19 +35,19 @@ description: "Task list for SSI Growth Mode (ReplyMate v0.4.0) — v1.1"
 
 ### Storage Schema [FND]
 
-- [ ] **T010** [FND] Write `tests/storage-schema.spec.ts` covering: schema versioning constant, `getProfile()` round-trip, `appendSsiSnapshot()` with eviction beyond 90, `markEngaged()` with 30-day expiry filter, migration helper invoked when stored version < current. Use `chrome.storage` jsdom mock from `tests/setup.ts`.
-- [ ] **T011** [FND] Implement `src/storage-schema.ts`: export TypeScript types for every entity in spec.md (`ProfileContext`, `ParsedPost`, `ScoredPost`, `DraftComment`, `EngagedPost`, `SsiSnapshot`, `ConnectionSuggestion`, `QueuePreferences`), all storage keys as constants, getter/setter helpers, eviction logic, schema-version migration scaffold (start at version 1). Make T010 pass.
-- [ ] **T012** [FND] Add JSDoc to every exported helper explaining when to call it from background vs popup vs content script.
+- [x] **T010** [FND] Write `tests/storage-schema.spec.ts` covering: schema versioning constant, `getProfile()` round-trip, `appendSsiSnapshot()` with eviction beyond 90, `markEngaged()` with 30-day expiry filter, migration helper invoked when stored version < current. Use `chrome.storage` jsdom mock from `tests/setup.ts`.
+- [x] **T011** [FND] Implement `src/storage-schema.ts`: export TypeScript types for every entity in spec.md (`ProfileContext`, `ParsedPost`, `ScoredPost`, `DraftComment`, `EngagedPost`, `SsiSnapshot`, `ConnectionSuggestion`, `QueuePreferences`), all storage keys as constants, getter/setter helpers, eviction logic, schema-version migration scaffold (start at version 1). Make T010 pass.
+- [x] **T012** [FND] Add JSDoc to every exported helper explaining when to call it from background vs popup vs content script.
 
 ### Prompt Builder [FND]
 
-- [ ] **T020** [FND] [P] Write `tests/prompt-builder.spec.ts` covering: `buildCommentPrompt` includes profile positioning summary, applies tone keyword, applies length constraint, contains "do-not" rules, includes 1-shot example. Snapshot the full prompt for 4 tone × 3 length combinations.
-- [ ] **T021** [FND] [P] Implement `src/prompt-builder.ts` with `buildCommentPrompt`, `buildConnectionNotePrompt`, `buildPositioningPrompt`. Pure function, no side effects. Make T020 pass.
+- [x] **T020** [FND] [P] Write `tests/prompt-builder.spec.ts` covering: `buildCommentPrompt` includes profile positioning summary, applies tone keyword, applies length constraint, contains "do-not" rules, includes 1-shot example. Snapshot the full prompt for 4 tone × 3 length combinations.
+- [x] **T021** [FND] [P] Implement `src/prompt-builder.ts` with `buildCommentPrompt`, `buildConnectionNotePrompt`, `buildPositioningPrompt`. Pure function, no side effects. Make T020 pass.
 
 ### MV3 Keep-Alive Helper [FND] (NEW v1.1)
 
-- [ ] **T015** [FND] [P] Write `tests/keep-alive.spec.ts` covering: `start()` opens a port and begins a 20s ping interval; `stop()` clears interval and disconnects port; idempotent (double-start does not leak ports); `start()` followed immediately by `stop()` does not throw.
-- [ ] **T016** [FND] [P] Implement `src/keep-alive.ts` per the plan.md "MV3 service-worker keep-alive" section. Single export `keepAlive` with `start()` / `stop()` methods. Internal state private. Make T015 pass.
+- [x] **T015** [FND] [P] Write `tests/keep-alive.spec.ts` covering: `start()` opens a port and begins a 20s ping interval; `stop()` clears interval and disconnects port; idempotent (double-start does not leak ports); `start()` followed immediately by `stop()` does not throw.
+- [x] **T016** [FND] [P] Implement `src/keep-alive.ts` per the plan.md "MV3 service-worker keep-alive" section. Single export `keepAlive` with `start()` / `stop()` methods. Internal state private. Make T015 pass.
 
 ### Profile Context [US3] — REWRITTEN in v1.1 to use chrome.scripting.executeScript
 
