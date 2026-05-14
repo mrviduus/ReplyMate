@@ -3,18 +3,10 @@ import OptimizedModelLoader from './model-loader';
 
 console.log('Background service worker loaded');
 
-// Model configuration for optimal selection
-const RECOMMENDED_MODELS = [
-  "Llama-3.2-3B-Instruct-q4f16_1-MLC",
-  "Llama-3.2-1B-Instruct-q4f16_1-MLC", 
-  "gemma-2-2b-it-q4f16_1-MLC",
-  "Phi-3.5-mini-instruct-q4f16_1-MLC",
-  "Qwen2.5-0.5B-Instruct-q4f16_1-MLC",
-];
-
 // Smart model selection for background service based on device capabilities
 function getOptimalBackgroundModel(): string {
-  // Check device memory if available
+  // navigator.deviceMemory is a real Chrome API but not yet in @types/dom
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const deviceMemory = (navigator as any).deviceMemory; // In GB
   const hardwareConcurrency = navigator.hardwareConcurrency || 4; // CPU cores
 
@@ -126,7 +118,6 @@ interface ValidationResult {
 function validateReplyQuality(reply: string): ValidationResult {
   const trimmedReply = reply.trim();
   const wordCount = trimmedReply.split(/\s+/).length;
-  const sentenceCount = (trimmedReply.match(/[.!?]+/g) || []).length;
 
   // Check minimum length
   if (wordCount < 10) {
@@ -529,7 +520,7 @@ async function performHealthCheck(): Promise<boolean> {
 }
 
 // Helper function to send messages to all tabs
-function sendProgressToAllTabs(message: any) {
+function sendProgressToAllTabs(message: Record<string, unknown>) {
   chrome.tabs.query({}, (tabs) => {
     tabs.forEach(tab => {
       if (tab.id) {
@@ -761,7 +752,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 async function handleLinkedInReplyWithComments(
   postContent: string,
   topComments: Array<{text: string, likeCount: number}>,
-  sendResponse: (response: any) => void
+  sendResponse: (response: unknown) => void
 ) {
   console.log('🟢 STEP 5: handleLinkedInReplyWithComments started');
 
@@ -950,7 +941,7 @@ Write your reply directly (no preambles):`;
   }
 }
 
-async function handleLinkedInReply(postContent: string, sendResponse: (response: any) => void) {
+async function handleLinkedInReply(postContent: string, sendResponse: (response: unknown) => void) {
   console.log('🟢 STEP 5: handleLinkedInReply started');
 
   // Initialize performance metrics

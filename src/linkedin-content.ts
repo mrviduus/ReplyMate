@@ -94,7 +94,7 @@ class LinkedInReplyMate {
                          document.querySelector('.scaffold-layout__main') ||
                          document.body;
     
-    this.observer = new MutationObserver((mutations) => {
+    this.observer = new MutationObserver((_mutations) => {
       // Debounce processing to avoid excessive calls
       this.debounce(() => this.processVisiblePosts(), 500)();
     });
@@ -449,7 +449,14 @@ class LinkedInReplyMate {
     }
   }
 
-  private handleReplyResponse(postId: string, response: any): void {
+  private handleReplyResponse(postId: string, response: {
+    reply?: string;
+    error?: string;
+    fallback?: boolean;
+    basedOnComments?: boolean;
+    commentCount?: number;
+    isInitializing?: boolean;
+  }): void {
     const post = this.posts.get(postId);
     if (!post) return;
 
@@ -742,6 +749,7 @@ class LinkedInReplyMate {
     return div.innerHTML;
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic constraint idiom
   private debounce<T extends (...args: any[]) => any>(
     func: T,
     wait: number
@@ -753,7 +761,7 @@ class LinkedInReplyMate {
     };
   }
 
-  private handleGenerateReply(postId: string, postContent: string): void {
+  private handleGenerateReply(postId: string, _postContent: string): void {
     // This will be called from background script for additional processing
     const post = this.posts.get(postId);
     if (post) {
@@ -822,8 +830,10 @@ function verifyStoredPrompts() {
 }
 
 // Make the test functions available globally for debugging
+/* eslint-disable @typescript-eslint/no-explicit-any -- intentional global for DevTools */
 (window as any).testReplyMatePrompts = testCustomPrompts;
 (window as any).verifyReplyMatePrompts = verifyStoredPrompts;
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 console.log('💡 ReplyMate Debug Functions Available:');
 console.log('   - window.testReplyMatePrompts() - Test prompt generation');

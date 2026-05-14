@@ -75,9 +75,9 @@ export class OptimizedModelLoader {
   private async preloadModel(modelId: string): Promise<void> {
     try {
       const cacheKey = `model_cache_${modelId}`;
-      const cached = await this.getCachedModelMetadata(cacheKey);
+      const cached = await this.getCachedModelMetadata(cacheKey) as { timestamp?: number } | null;
 
-      if (cached && Date.now() - cached.timestamp < 7 * 24 * 60 * 60 * 1000) {
+      if (cached?.timestamp && Date.now() - cached.timestamp < 7 * 24 * 60 * 60 * 1000) {
         console.log(`✨ Using cached metadata for ${modelId}`);
         return;
       }
@@ -95,7 +95,7 @@ export class OptimizedModelLoader {
     }
   }
 
-  private async getCachedModelMetadata(key: string): Promise<any> {
+  private async getCachedModelMetadata(key: string): Promise<unknown> {
     return new Promise((resolve) => {
       chrome.storage.local.get(key, (result) => {
         resolve(result[key] || null);
@@ -103,7 +103,7 @@ export class OptimizedModelLoader {
     });
   }
 
-  private async setCachedModelMetadata(key: string, data: any): Promise<void> {
+  private async setCachedModelMetadata(key: string, data: unknown): Promise<void> {
     return new Promise((resolve) => {
       chrome.storage.local.set({ [key]: data }, resolve);
     });
@@ -126,7 +126,7 @@ export class OptimizedModelLoader {
 
     const loadingConfig: ModelLoadingConfig = {
       modelId,
-      priority: (this.MODEL_PRIORITIES[modelId] || 'medium') as any,
+      priority: (this.MODEL_PRIORITIES[modelId] || 'medium') as 'high' | 'medium' | 'low',
       maxRetries: config?.maxRetries || 3,
       timeoutMs: config?.timeoutMs || 120000,
       preload: config?.preload || false,
@@ -318,8 +318,10 @@ export class OptimizedModelLoader {
     }
   }
 
-  private async getMemoryInfo(): Promise<any> {
+  private async getMemoryInfo(): Promise<{ totalJSHeapSize: number; usedJSHeapSize: number }> {
     if ('memory' in performance) {
+      // performance.memory is a non-standard Chrome API not in @types/dom
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return (performance as any).memory;
     }
     return {

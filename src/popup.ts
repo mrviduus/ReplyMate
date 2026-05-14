@@ -92,7 +92,6 @@ const reinitModelBtn = getElementAndCheck("reinitModel") as HTMLButtonElement;
 // Model configuration
 let selectedModel = "";
 let actualActiveModel = ""; // The model actually running in background
-let currentProfile: ModelProfileKey = 'balanced';
 
 // Default prompts
 let defaultPrompts = {
@@ -205,7 +204,6 @@ function getOptimalModel(): string {
     for (const modelId of optimalModels) {
       if (availableModelIds.includes(modelId)) {
         console.log('⚖️ Selected balanced model for LinkedIn:', modelId);
-        currentProfile = 'balanced';
         return modelId;
       }
     }
@@ -727,7 +725,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // Listen for progress updates from background
-  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  chrome.runtime.onMessage.addListener((message, _sender, _sendResponse) => {
     if (message.type === 'modelLoadProgress') {
       handleProgressUpdate(message as LoadingProgress);
     }
