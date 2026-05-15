@@ -65,8 +65,12 @@
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Button Text */
@@ -115,9 +119,15 @@
 }
 
 @keyframes shimmer {
-  0% { opacity: 0.8; }
-  50% { opacity: 1; }
-  100% { opacity: 0.8; }
+  0% {
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.8;
+  }
 }
 
 .replymate-smart-indicator svg {
@@ -267,25 +277,25 @@
     font-size: 12px !important;
     gap: 4px !important;
   }
-  
+
   .replymate-button-text {
     display: none;
   }
-  
+
   .replymate-panel {
     margin: 12px 0;
     padding: 12px;
   }
-  
+
   .replymate-panel-actions {
     justify-content: center;
   }
-  
+
   .replymate-btn {
     padding: 6px 12px;
     font-size: 12px;
   }
-  
+
   .replymate-toast {
     max-width: 90vw;
     margin: 0 5vw;
@@ -297,11 +307,11 @@
   .replymate-generate-btn {
     border-width: 2px;
   }
-  
+
   .replymate-panel {
     border-width: 2px;
   }
-  
+
   .replymate-btn {
     border-width: 2px;
   }
@@ -315,11 +325,11 @@
   .replymate-toast {
     transition: none;
   }
-  
+
   .replymate-icon.spinning {
     animation: none;
   }
-  
+
   .replymate-generate-btn:hover,
   .replymate-btn:hover {
     transform: none;
@@ -333,19 +343,19 @@
     border-color: #404040;
     color: #e1e1e1;
   }
-  
+
   .replymate-reply-text {
     background: #2a2a2a;
     border-color: #404040;
     color: #e1e1e1;
   }
-  
+
   .replymate-btn {
     background: #2a2a2a;
     border-color: #404040;
     color: #e1e1e1;
   }
-  
+
   .replymate-btn:hover {
     background: #3a3a3a;
   }
@@ -458,19 +468,19 @@
     justify-content: center;
     gap: 6px;
   }
-  
+
   .replymate-btn {
     padding: 6px 10px;
     font-size: 11px;
   }
-  
+
   /* Stack buttons on very small screens */
   @media (max-width: 480px) {
     .replymate-panel-actions {
       flex-direction: column;
       width: 100%;
     }
-    
+
     .replymate-btn {
       width: 100%;
       justify-content: center;

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ReplyMate",
-  "version": "0.3.3",
+  "version": "0.4.0",
   "description": "AI-powered assistant for LinkedIn reply generation.",
   "icons": {
     "16": "icons/icon-16.png",
@@ -26,13 +26,25 @@
       "js": ["linkedin-content.ts"],
       "css": ["linkedin-styles.css"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.linkedin.com/sales/ssi*"],
+      "js": ["ssi-content.ts"],
+      "run_at": "document_idle"
     }
   ],
-  "permissions": ["storage", "tabs", "activeTab", "windows", "alarms"],
+  "permissions": [
+    "storage",
+    "tabs",
+    "activeTab",
+    "windows",
+    "alarms",
+    "scripting"
+  ],
   "host_permissions": ["https://*.linkedin.com/*"],
   "web_accessible_resources": [
     {
-      "resources": ["linkedin-styles.css"],
+      "resources": ["linkedin-styles.css", "engagement-queue.css"],
       "matches": ["https://*.linkedin.com/*"]
     }
   ]

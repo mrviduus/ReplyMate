@@ -24,20 +24,15 @@ jobs:
     
     - name: Check code formatting
       run: npm run format:check
-    
-    - name: Run ESLint
-      run: npm run lint:report
-    
-    - name: Upload ESLint results
-      uses: github/super-linter/slim@v4
-      if: always()
-      env:
-        DEFAULT_BRANCH: main
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        VALIDATE_TYPESCRIPT_ES: true
-        VALIDATE_CSS: true
-        VALIDATE_HTML: true
-        VALIDATE_JSON: true
+
+    - name: Run ESLint (project config, --max-warnings=0)
+      run: npm run lint
+
+    # super-linter/slim@v4 was previously invoked here. It pulls down
+    # stylelint + htmlhint + jscpd with their OWN defaults (ignoring repo
+    # config) and reports thousands of false positives against LinkedIn-
+    # targeted CSS / HTML. ESLint + Prettier + TypeScript already cover
+    # what we actually want enforced.
 
   type-check:
     runs-on: ubuntu-latest

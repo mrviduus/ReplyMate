@@ -1,6 +1,6 @@
 {
   "name": "replymate-extension",
-  "version": "0.3.3",
+  "version": "0.4.0",
   "description": "AI-powered LinkedIn assistant for generating professional reply suggestions locally in your browser",
   "private": true,
   "scripts": {
@@ -65,6 +65,7 @@
   },
   "dependencies": {
     "@mlc-ai/web-llm": "^0.2.79",
+    "chart.js": "^4.5.1",
     "progressbar.js": "^1.1.0"
   }
 }
