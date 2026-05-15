@@ -815,6 +815,93 @@ body {
   flex: 1;
 }
 
+/* v0.5.0 — Cloud mode banner + Inference Provider section */
+.cloud-mode-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 8px 14px;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, #fff7e0 0%, #fff3cd 100%);
+  border: 1px solid #ffcf66;
+  border-radius: 6px;
+  color: #6b4d00;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.cloud-mode-banner i {
+  flex: 0 0 auto;
+  font-size: 16px;
+  padding-top: 1px;
+  color: #c08400;
+}
+.cloud-mode-banner__text {
+  flex: 1;
+}
+.cloud-mode-banner__text strong {
+  color: #6b4d00;
+}
+
+.provider-toggle {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 0 10px;
+}
+.provider-toggle__option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.provider-toggle__option input[type="radio"] {
+  margin: 0;
+}
+.provider-openai-config {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 6px 0;
+  padding: 10px;
+  background: rgba(10, 102, 194, 0.05);
+  border: 1px solid rgba(10, 102, 194, 0.15);
+  border-radius: 6px;
+}
+.provider-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #586069;
+}
+.provider-field span {
+  font-weight: 600;
+  color: #1d1d1f;
+}
+.provider-field input,
+.provider-field select {
+  padding: 6px 8px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: inherit;
+}
+.provider-field input:focus,
+.provider-field select:focus {
+  outline: 2px solid #0a66c2;
+  outline-offset: -1px;
+}
+.provider-field__hint {
+  font-size: 11px;
+  color: #6a737d;
+  font-weight: normal;
+}
+
 /* SSI Tracker section (T224 — Phase C, US2) */
 .ssi-none {
   display: flex;

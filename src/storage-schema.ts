@@ -23,6 +23,7 @@ export const STORAGE_KEYS = {
   ssiLastError: 'replymate.ssi.lastError.v1',
   connectionsSuggestions: 'replymate.connections.suggestions.v1',
   connectionsDraftedThisWeek: 'replymate.connections.draftedThisWeek.v1',
+  provider: 'replymate.provider.v1',
   schemaVersion: 'replymate.schema.version',
 } as const;
 
@@ -124,6 +125,26 @@ export interface QueuePreferences {
   sidebarPosition: { top: number; right: number };
 }
 
+/**
+ * v0.5.0 — Inference provider selection. Persisted per-browser-profile in
+ * chrome.storage.local (never `sync` — `sync` shares across all the user's
+ * devices and the OpenAI API key is a per-device secret).
+ *
+ * Default: { mode: 'local' } — Constitution v1.2 §I default-off cloud.
+ */
+export type ProviderMode = 'local' | 'openai';
+
+export interface ProviderConfig {
+  mode: ProviderMode;
+  openai?: {
+    apiKey: string;
+    model: string; // e.g. "gpt-4o-mini"
+    baseUrl?: string;
+  };
+}
+
+export const DEFAULT_PROVIDER_CONFIG: ProviderConfig = { mode: 'local' };
+
 // ─── Storage helpers ────────────────────────────────────────────────────────
 
 async function readKey<T>(key: string): Promise<T | null> {
@@ -193,6 +214,20 @@ export async function markEngaged(postId: string): Promise<void> {
 export async function isEngaged(postId: string): Promise<boolean> {
   const active = await getEngagedPosts();
   return active.some((e) => e.postId === postId);
+}
+
+// ─── Provider config (v0.5.0) ────────────────────────────────────────────────
+
+/** Read provider config; returns defaults when unset. */
+export async function getProviderConfig(): Promise<ProviderConfig> {
+  const stored = await readKey<ProviderConfig>(STORAGE_KEYS.provider);
+  if (!stored) return { ...DEFAULT_PROVIDER_CONFIG };
+  return stored;
+}
+
+/** Persist provider config. Background handles message. Popup-driven setter. */
+export async function setProviderConfig(cfg: ProviderConfig): Promise<void> {
+  await writeKey(STORAGE_KEYS.provider, cfg);
 }
 
 // ─── SSI last-error chip ────────────────────────────────────────────────────

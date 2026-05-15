@@ -4,6 +4,52 @@ All notable changes to ReplyMate are documented here. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows
 [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] — 2026-05-15 — OpenAI BYOK (opt-in cloud)
+
+### Added — OpenAI provider
+
+- **Inference provider abstraction** (`src/providers/`): single `InferenceProvider` interface, `LocalProvider` wraps existing WebLLM streaming completion, **new `OpenAIProvider`** posts to `api.openai.com/v1/chat/completions` with the user's own API key (BYOK — no bundled credentials).
+- **Popup "Inference Provider" section**: radio toggle Local / OpenAI, masked API key field, model dropdown (`gpt-4o-mini`, `gpt-4o`, `gpt-4.1-mini`, `gpt-4.1`, `o4-mini` — custom values also accepted on save). Saved to `replymate.provider.v1` in `chrome.storage.local` (per-browser-profile; never `sync` — API keys are per-device secrets).
+- **Honest UI when cloud mode active:**
+  - Amber **cloud-mode banner** at top of popup naming the active provider + model
+  - Every `queue.draftComment` / `profile.capture` response from background includes `provider` (name) + `isCloud` so UI can render per-action chips
+- **Default: local.** Fresh install lands in local mode. Cloud requires explicit user toggle + save.
+- **`provider.get` / `provider.set`** background message handlers wire popup ↔ storage.
+
+### Added — Inference call sites refactored to use provider
+
+- `queue.draftComment` handler — Engagement Queue drafts now go through `await provider.generate(...)` instead of direct `engine.chat.completions.create`. Same WebLLM behavior in local mode; OpenAI quality available when opted in.
+- `profile.capture` handler — positioning summary generation likewise. (This was the failure mode in v0.4.0 — local 3B model hallucinated a "marketing consultant" persona from empty parser input. With OpenAI opted in, even imperfect parser input produces coherent output.)
+- Legacy `generateLinkedInReply` / `generateLinkedInReplyWithComments` handlers (the v0.3.x individual-post "Generate Reply" button) **deliberately deferred** — they bundle inline retry + validation + performance-metric instrumentation, refactor planned for v0.5.1. They continue to use local WebLLM directly.
+
+### Changed
+
+- **Constitution amended to v1.2.0** (2026-05-15). Principle I now permits an opt-in cloud carve-out subject to: off-by-default, BYOK only, closed allow-list (currently just OpenAI), persistent honest UI, CSP-restricted egress, no key logging. Sync Impact Report at top of `constitution.md`.
+- `src/manifest.json` CSP: added `https://api.openai.com` to `connect-src` (the only new allowed egress).
+- `src/storage-schema.ts`: new `ProviderConfig` type, `replymate.provider.v1` key, `getProviderConfig` / `setProviderConfig` helpers. Schema version unchanged (additive, no migration needed).
+
+### Tests
+
+- **342 tests passing** (+22 from v0.4.0). New suites: `tests/providers/local-provider.spec.ts` (6), `tests/providers/openai-provider.spec.ts` (11), `tests/providers/factory.spec.ts` (5). Mocked `fetch` for OpenAI contract tests including non-OK handling and explicit assertion that the API key never appears in error messages.
+
+### Deferred to v0.5.1
+
+- Legacy reply handler refactor (use provider abstraction for the v0.3.x individual-post flow too)
+- WebLLM model-list update (Phi-4-mini, Qwen3, Gemma 3 evaluation against current Llama-3.2 tier)
+- Cloud-mode chip in Engagement Queue sidebar header (popup banner exists; sidebar chip not yet)
+- README screenshots showing the new Provider section
+
+### Compliance posture (per Constitution v1.2.0 §I)
+
+| State | Outbound LLM calls | Banner visible |
+|---|---|---|
+| Default (local) | **0** | No |
+| User toggled to OpenAI + saved valid key | Per generation, to `api.openai.com` only | Yes |
+
+LinkedIn TOS implications when cloud mode is active are the user's responsibility — the extension surfaces the egress prominently and does not attempt to anonymize the content.
+
+---
+
 ## [0.4.0] — 2026-05-15 — SSI Growth Mode
 
 ### Added — SSI Growth Mode

@@ -32,8 +32,73 @@
         </div>
       </div>
 
+      <!-- v0.5.0 — Cloud Mode Banner (shown only when OpenAI provider active) -->
+      <div id="cloudModeBanner" class="cloud-mode-banner" style="display: none" role="alert">
+        <i class="fa fa-cloud" aria-hidden="true"></i>
+        <div class="cloud-mode-banner__text">
+          <strong>Cloud mode active</strong> — drafts + profile data are sent to
+          <span id="cloudProviderName">OpenAI</span>. Switch to local for privacy.
+        </div>
+      </div>
+
       <!-- Settings Content -->
       <div id="settings-content" class="settings-main">
+        <!-- Inference Provider Section (v0.5.0) -->
+        <div class="settings-section">
+          <h3>
+            <i class="fa fa-microchip"></i>
+            Inference Provider
+          </h3>
+          <p class="settings-description">
+            Where AI runs. <strong>Local</strong> = WebLLM in your browser, zero outbound calls.
+            <strong>OpenAI</strong> = better quality, requires your own API key — drafts + profile data leave your
+            browser.
+          </p>
+
+          <div class="provider-toggle">
+            <label class="provider-toggle__option">
+              <input type="radio" name="providerMode" value="local" id="providerLocal" checked />
+              <span>Local (WebLLM, default)</span>
+            </label>
+            <label class="provider-toggle__option">
+              <input type="radio" name="providerMode" value="openai" id="providerOpenAI" />
+              <span>OpenAI (BYOK)</span>
+            </label>
+          </div>
+
+          <div id="providerOpenAIConfig" class="provider-openai-config" style="display: none">
+            <label class="provider-field">
+              <span>API Key</span>
+              <input
+                type="password"
+                id="providerOpenAIKey"
+                placeholder="sk-..."
+                autocomplete="off"
+                spellcheck="false"
+              />
+              <small class="provider-field__hint">Stored locally in this browser only — never synced.</small>
+            </label>
+
+            <label class="provider-field">
+              <span>Model</span>
+              <select id="providerOpenAIModel">
+                <option value="gpt-4o-mini">gpt-4o-mini (fast, cheap)</option>
+                <option value="gpt-4o">gpt-4o (best quality)</option>
+                <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+                <option value="gpt-4.1">gpt-4.1</option>
+                <option value="o4-mini">o4-mini (reasoning)</option>
+              </select>
+            </label>
+          </div>
+
+          <button id="providerSave" class="btn btn-primary">
+            <i class="fa fa-save"></i>
+            Save Provider Settings
+          </button>
+
+          <div id="providerStatus" class="status-message" style="display: none"></div>
+        </div>
+
         <!-- Profile Context Section (T037 — Phase A, US3) -->
         <div class="settings-section">
           <h3>
