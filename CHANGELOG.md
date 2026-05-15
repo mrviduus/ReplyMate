@@ -4,6 +4,30 @@ All notable changes to ReplyMate are documented here. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows
 [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.3] — 2026-05-15 — SSI donut chart + real-DOM SSI parser fix
+
+### Fixed
+
+- **SSI capture no longer fails on real LinkedIn DOM** (Bug Report 2026-05-15: "Capture failed: Could not locate `.ssi-score-table__current-ssi-score`"). The v0.4.0 parser hardcoded selectors from a synthetic fixture that don't exist in the live 2026 LinkedIn SSI page. Rewrote `parseSsiDom` with two-pass extraction:
+  1. **Selector pass** — try multiple class candidates (legacy + current variants)
+  2. **Text-pattern fallback** — find numbers near anchor strings like `"X / 100"`, `"X out of 100"`, or component titles like `"Establish your professional brand"`. Handles the common LinkedIn pattern of inline title+value layouts (`"8.78 | Establish your professional brand"`).
+- **Rank parsing failure is now non-fatal.** If components + total parse OK but `industryRank` / `networkRank` selectors don't match, snapshot is saved with `'unknown'` ranks rather than discarding the whole capture.
+- **`Document.textContent === null` per spec** — fallback helper `getDocText()` correctly reads via `body` or `documentElement` for `Document`, falling back to `textContent` for `DocumentFragment`.
+
+### Added
+
+- **Doughnut chart in popup for current SSI breakdown** (user request: "I want to see this chart without going to the link"). Matches LinkedIn's `/sales/ssi` visual: 4-segment donut colored orange / purple / teal / blue (Establish brand / Find people / Engage / Build), 160×160px, total score rendered in center via CSS overlay. Renders only when there's at least 1 captured snapshot.
+- **`scripts/dump-linkedin-ssi-dom.js`** — companion to v0.5.1's profile-DOM dump script. Paste into DevTools on `/sales/ssi`, copies a JSON snapshot of candidate selectors + raw text + component-title matches + big-number scan to clipboard. Lets us update `ssi-parser.ts` against the canonical real DOM in a follow-up if the v0.5.3 defensive parser still misses on some account variant (Sales Navigator vs Premium vs free).
+- **2 new ssi-parser tests** covering the text-pattern fallback paths: total via `"X / 100"`, components via inline `"score | title"` LinkedIn pattern.
+
+### Known follow-ups
+
+- If the defensive SSI parser still fails on your account, run `scripts/dump-linkedin-ssi-dom.js` on `/sales/ssi` and share the JSON for a canonical selector fix in v0.5.4.
+- Profile parser still has the same root cause (defensive but waiting for `dump-linkedin-profile-dom.js` snapshot). Tracked since v0.5.2.
+- Pre-commit hook (husky + lint-staged) to auto-run prettier — every minor release so far has needed a follow-up format commit. Tracked for v0.5.4.
+
+---
+
 ## [0.5.2] — 2026-05-15 — VRAM unload, defensive parsing, action deprecation
 
 ### Fixed

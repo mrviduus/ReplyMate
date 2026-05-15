@@ -211,11 +211,14 @@ const ssiCompBuild = getElementAndCheck('ssiCompBuild');
 const ssiInsight = getElementAndCheck('ssiInsight');
 const ssiErrorChip = getElementAndCheck('ssiErrorChip');
 const ssiTrendCanvas = getElementAndCheck('ssiTrendCanvas') as HTMLCanvasElement | null;
+const ssiDonutCanvas = getElementAndCheck('ssiDonutCanvas') as HTMLCanvasElement | null;
+const ssiDonutTotal = getElementAndCheck('ssiDonutTotal');
 const ssiRefreshBtn = getElementAndCheck('ssiRefresh') as HTMLButtonElement | null;
 const ssiOpenPageBtn = getElementAndCheck('ssiOpenPage') as HTMLButtonElement | null;
 const ssiMessage = getElementAndCheck('ssiMessage');
 
 let ssiChart: { destroy: () => void } | null = null;
+let ssiDonutChart: { destroy: () => void } | null = null;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- chart.js/auto default export
 let cachedChartCtor: any = null;
 
@@ -283,6 +286,54 @@ async function loadSsiData(): Promise<void> {
       }
       const ChartCtor = await loadChartCtor();
       ssiChart = renderSsiTrend(snapshots, ssiTrendCanvas, ChartCtor as never);
+    }
+    // v0.5.3 — donut chart for current 4-component breakdown (matches LinkedIn's
+    // own /sales/ssi visualization so users don't need to navigate there).
+    if (ssiDonutCanvas) {
+      if (ssiDonutChart) {
+        try {
+          ssiDonutChart.destroy();
+        } catch {
+          /* ignore */
+        }
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Chart.js dynamic load
+      const ChartCtor = (await loadChartCtor()) as any;
+      const c = latest.components;
+      ssiDonutChart = new ChartCtor(ssiDonutCanvas, {
+        type: 'doughnut',
+        data: {
+          labels: ['Establish brand', 'Find people', 'Engage', 'Build relationships'],
+          datasets: [
+            {
+              data: [
+                c.establishBrand,
+                c.findRightPeople,
+                c.engageWithInsights,
+                c.buildRelationships,
+              ],
+              backgroundColor: ['#e87726', '#9d75d6', '#15a895', '#1a91c4'],
+              borderColor: '#ffffff',
+              borderWidth: 2,
+            },
+          ],
+        },
+        options: {
+          responsive: false,
+          maintainAspectRatio: false,
+          cutout: '70%',
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Chart.js context
+                label: (ctx: any) => `${ctx.label}: ${ctx.parsed.toFixed(2)} / 25`,
+              },
+            },
+          },
+        },
+      });
+      if (ssiDonutTotal) ssiDonutTotal.textContent = String(latest.total);
     }
   }
 

@@ -72,7 +72,9 @@ describe('parseSsiDom — error cases', () => {
     if (!r.ok) expect(r.reason).toBe('missing-component');
   });
 
-  it('returns missing-rank when ranking statements absent', () => {
+  it('v0.5.3: missing ranking statements → returns success with rank="unknown" (non-fatal)', () => {
+    // v0.5.3 changed rank parsing to be non-fatal — components + total are the
+    // values that drive the dashboard; rank text is a chip and degrades gracefully.
     const html = `<main>
       <div class="ssi-score-table__current-ssi-score">42</div>
       <div class="ssi-component-card"><h3 class="ssi-component-card__title">Establish your professional brand</h3><div class="ssi-score-table__component-value">5</div></div>
@@ -82,18 +84,71 @@ describe('parseSsiDom — error cases', () => {
     </main>`;
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const r = parseSsiDom(doc, { now: FIXED_NOW });
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.reason).toBe('missing-rank');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.snapshot.industryRank).toBe('unknown');
+      expect(r.snapshot.networkRank).toBe('unknown');
+      expect(r.snapshot.total).toBe(42);
+    }
   });
 
-  it('returns malformed when total cannot be parsed as a number', () => {
+  it('v0.5.3: total-element with non-numeric text falls through to missing-total (after text-pattern fallback also fails)', () => {
+    // v0.5.3 changed: parser has multiple fallback paths. The 'malformed' branch
+    // is now unreachable in practice because Pass 1 (multi-selector) → Pass 2
+    // (text patterns like "X / 100") → null all converge on missing-total.
     const html = `<main>
       <div class="ssi-score-table__current-ssi-score">not-a-number</div>
     </main>`;
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const r = parseSsiDom(doc, { now: FIXED_NOW });
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.reason).toBe('malformed');
+    if (!r.ok) expect(r.reason).toBe('missing-total');
+  });
+
+  it('v0.5.3: text-pattern fallback — finds total via "X / 100" when class selectors absent', () => {
+    const html = `<main>
+      <div>Your SSI is currently 42 / 100 — keep going!</div>
+      <div class="ssi-component-card"><h3 class="ssi-component-card__title">Establish your professional brand</h3><div class="ssi-score-table__component-value">10</div></div>
+      <div class="ssi-component-card"><h3 class="ssi-component-card__title">Find the right people</h3><div class="ssi-score-table__component-value">10</div></div>
+      <div class="ssi-component-card"><h3 class="ssi-component-card__title">Engage with insights</h3><div class="ssi-score-table__component-value">10</div></div>
+      <div class="ssi-component-card"><h3 class="ssi-component-card__title">Build relationships</h3><div class="ssi-score-table__component-value">12</div></div>
+      <p>You rank in the top 78% of your industry.</p>
+      <p>You rank in the top 91% of your network.</p>
+    </main>`;
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const r = parseSsiDom(doc, { now: FIXED_NOW });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.snapshot.total).toBe(42);
+      expect(r.snapshot.industryRank).toMatch(/78%/);
+      expect(r.snapshot.networkRank).toMatch(/91%/);
+    }
+  });
+
+  it('v0.5.3: text-pattern fallback — finds components by inline title-value pattern', () => {
+    // Mimics the real LinkedIn pattern user reported on 2026-05-15:
+    // "8.78 | Establish your professional brand"
+    const html = `<main>
+      <div>Your score: 18 out of 100</div>
+      <ul>
+        <li>8.78 | Establish your professional brand</li>
+        <li>6.12 | Find the right people</li>
+        <li>0.9 | Engage with insights</li>
+        <li>2.214 | Build relationships</li>
+      </ul>
+      <p>Top 78% of your industry</p>
+      <p>Top 91% of your network</p>
+    </main>`;
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const r = parseSsiDom(doc, { now: FIXED_NOW });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.snapshot.total).toBe(18);
+      expect(r.snapshot.components.establishBrand).toBeCloseTo(8.78);
+      expect(r.snapshot.components.findRightPeople).toBeCloseTo(6.12);
+      expect(r.snapshot.components.engageWithInsights).toBeCloseTo(0.9);
+      expect(r.snapshot.components.buildRelationships).toBeCloseTo(2.214);
+    }
   });
 });
 
