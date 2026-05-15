@@ -107,7 +107,7 @@ export function parseProfileDom(doc: Document | DocumentFragment): RawProfileFie
     doc.querySelector('#skills')?.closest('section, div.artdeco-card');
   if (skillsContainer) {
     const candidates: NodeListOf<Element> = skillsContainer.querySelectorAll(
-      'li.pvs-list__paged-list-item, li.pvs-entity, .pvs-entity__path-node',
+      'li.pvs-list__paged-list-item, li.pvs-entity, .pvs-entity__path-node'
     );
     for (let i = 0; i < candidates.length && topSkills.length < MAX_TOP_SKILLS; i++) {
       // Look for the skill name — prefer .t-bold (LinkedIn's bold style class),
@@ -129,7 +129,7 @@ export function parseProfileDom(doc: Document | DocumentFragment): RawProfileFie
     doc.querySelector('#content_collections')?.closest('section');
   if (activityContainer) {
     const texts = activityContainer.querySelectorAll(
-      '.update-components-text, .feed-shared-update-v2__description, .feed-shared-text',
+      '.update-components-text, .feed-shared-update-v2__description, .feed-shared-text'
     );
     for (let i = 0; i < texts.length && recentPostThemes.length < MAX_RECENT_POST_THEMES; i++) {
       const t = readText(texts[i]);
