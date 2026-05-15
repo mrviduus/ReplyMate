@@ -4,7 +4,7 @@ All notable changes to ReplyMate are documented here. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows
 [SemVer](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] — v0.4.0 SSI Growth Mode
+## [0.4.0] — 2026-05-15 — SSI Growth Mode
 
 ### Added — SSI Growth Mode
 - **Profile Context capture** (US3): one-click capture of the user's LinkedIn profile from the popup. Active-tab URL guard (`/in/{handle}/`), `chrome.scripting.executeScript` for read-only HTML grab, pure parser extracts `fullName / headline / about (≤1500c) / topSkills[10] / recentPostThemes[3-5]`, WebLLM generates a 2-sentence positioning summary, persisted under `replymate.profile.v1`. Stale chip surfaces after 30 days (read-only — no auto-refresh).
