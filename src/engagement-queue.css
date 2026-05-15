@@ -80,6 +80,27 @@
   padding: 8px;
 }
 
+.replymate-queue__warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  margin: 8px;
+  background: #fff3cd;
+  border: 1px solid #ffe69c;
+  border-radius: 6px;
+  color: #856404;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.replymate-queue__warning-icon {
+  flex: 0 0 auto;
+  padding-top: 2px;
+}
+.replymate-queue__warning-text {
+  flex: 1;
+}
+
 .replymate-queue__tile {
   padding: 10px 12px;
   margin-bottom: 8px;

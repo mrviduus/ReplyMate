@@ -35,9 +35,11 @@ import type { ProfileContext } from './storage-schema';
 
 const PROFILE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
-// Only canonical profile URLs — /in/{handle} with no extra path segments.
-// Trailing slash optional. www. optional.
-const PROFILE_URL_PATTERN = /^https?:\/\/(www\.)?linkedin\.com\/in\/[^/?#]+\/?$/;
+// Canonical profile URLs — /in/{handle} with no extra path segments.
+// Trailing slash optional. www. optional. Query string / hash tolerated
+// (LinkedIn occasionally appends `?miniProfileUrn=...` or `#contact`).
+// Deep paths like /in/handle/details/skills/ are still rejected.
+const PROFILE_URL_PATTERN = /^https?:\/\/(www\.)?linkedin\.com\/in\/[^/?#]+\/?(\?[^#]*)?(#.*)?$/;
 
 export type CaptureFailureReason =
   | 'no-active-tab'

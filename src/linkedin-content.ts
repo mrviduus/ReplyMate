@@ -2,6 +2,7 @@
 // Handles post detection, reply generation, and UI injection
 
 import { EngagementQueue } from './engagement-queue';
+import type { ScoreFeedResult } from './engagement-queue';
 import { parseFeedDom } from './feed-parser';
 import type { ParsedPost, ScoredPost } from './storage-schema';
 
@@ -52,9 +53,20 @@ class LinkedInReplyMate {
     const onFeed = location.pathname.startsWith('/feed');
     if (onFeed && !this.engagementQueue) {
       this.engagementQueue = new EngagementQueue({
-        scoreFeed: (posts: ParsedPost[]) =>
-          this.sendQueueMessage<{ scored?: ScoredPost[] }>({ action: 'queue.scoreFeed', posts })
-            .then((r) => r?.scored ?? []),
+        scoreFeed: async (posts: ParsedPost[]): Promise<ScoreFeedResult> => {
+          const resp = await this.sendQueueMessage<{
+            ok?: boolean;
+            scored?: ScoredPost[];
+            error?: string;
+          }>({ action: 'queue.scoreFeed', posts });
+          if (!resp || resp.ok === false) {
+            return {
+              ok: false,
+              warning: resp?.error ?? 'Could not score the feed. Capture your profile in the popup, then refresh.',
+            };
+          }
+          return { ok: true, scored: resp.scored ?? [] };
+        },
         draftComment: (req) =>
           this.sendQueueMessage<{ draft?: string }>({
             action: 'queue.draftComment',
@@ -102,15 +114,33 @@ class LinkedInReplyMate {
   }
 
   private watchRouteChanges(): void {
-    // LinkedIn is an SPA; poll location.pathname so we mount/unmount the queue
-    // when the user navigates between /feed/ and other surfaces.
+    // LinkedIn is an SPA. Prefer the Navigation API (Chrome 102+) which fires
+    // exactly once per route change; fall back to a 5s pathname poll on older
+    // engines. Either way we mount/unmount the queue when the user moves
+    // between /feed/ and other surfaces.
     this.currentPath = location.pathname;
-    this.routePollIntervalId = setInterval(() => {
+
+    const checkAndRemount = () => {
       if (location.pathname !== this.currentPath) {
         this.currentPath = location.pathname;
         this.mountEngagementQueueIfOnFeed();
       }
-    }, 1500);
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- window.navigation not in @types/dom yet
+    const nav = (window as any).navigation as
+      | { addEventListener?: (type: string, listener: () => void) => void }
+      | undefined;
+    if (nav && typeof nav.addEventListener === 'function') {
+      nav.addEventListener('navigate', () => {
+        // setTimeout 0 lets location.pathname reflect the new route before we read it.
+        setTimeout(checkAndRemount, 0);
+      });
+      return;
+    }
+
+    // Fallback polling — bumped from 1.5s to 5s; route changes are not latency-critical.
+    this.routePollIntervalId = setInterval(checkAndRemount, 5000);
   }
 
   private notifyBackgroundReady(): void {

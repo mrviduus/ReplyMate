@@ -182,11 +182,13 @@ describe('profile-context (T033)', () => {
       if (!res.ok) expect(res.reason).toBe('summary-failed');
     });
 
-    it('accepts URLs with or without trailing slash, with or without www', async () => {
+    it('accepts URLs with or without trailing slash, with or without www, with query/hash', async () => {
       const variants = [
         'https://www.linkedin.com/in/synthetic-me',
         'https://www.linkedin.com/in/synthetic-me/',
         'https://linkedin.com/in/synthetic-me/',
+        'https://www.linkedin.com/in/synthetic-me/?miniProfileUrn=urn%3Ali%3Afsd_profile%3A123',
+        'https://www.linkedin.com/in/synthetic-me/#contact',
       ];
       for (const url of variants) {
         installMemoryStorage();

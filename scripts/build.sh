@@ -1,75 +1,63 @@
 #!/bin/bash
 
-# Build script for ReplyMate Chrome Extension
+# Build script for ReplyMate Chrome Extension.
+# Enforces Constitution v1.1 §II quality gates, then delegates to Parcel.
+#
+# Why we DON'T run a raw `tsc + cp manifest.json` pipeline anymore:
+#   - manifest.json references `background.ts` and `linkedin-content.ts`
+#   - Chrome cannot load TypeScript directly; Parcel rewrites the manifest
+#     to point at the compiled .js entries on its way out
+#   - A standalone tsc compile would leave dist/manifest.json broken
+# Source of truth for the build is `npm run build` (Parcel webextension config).
+
 set -e
 
-echo "🚀 Starting ReplyMate build process..."
-
-# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Check if required commands exist
+echo "🚀 Starting ReplyMate build process..."
+
+# Check dependencies
 command -v npm >/dev/null 2>&1 || { echo -e "${RED}❌ npm is required but not installed.${NC}" >&2; exit 1; }
-command -v tsc >/dev/null 2>&1 || { echo -e "${RED}❌ TypeScript compiler is required but not installed.${NC}" >&2; exit 1; }
 
-# Clean previous build
-echo -e "${YELLOW}🧹 Cleaning previous build...${NC}"
-rm -rf dist/
-mkdir -p dist/
-
-# Install dependencies if node_modules doesn't exist
 if [ ! -d "node_modules" ]; then
     echo -e "${YELLOW}📦 Installing dependencies...${NC}"
     npm ci
 fi
 
-# Run type checking
+# Quality gates — must pass before build (Constitution v1.1 §II)
 echo -e "${YELLOW}🔍 Running type checks...${NC}"
 npm run type-check
 
-# Run linting
-echo -e "${YELLOW}🧹 Running linter...${NC}"
+echo -e "${YELLOW}🧹 Running linter (--max-warnings=0)...${NC}"
 npm run lint
 
-# Run tests
-echo -e "${YELLOW}🧪 Running tests...${NC}"
+echo -e "${YELLOW}🧪 Running test suite...${NC}"
 npm run test:ci
 
-# Compile TypeScript
-echo -e "${YELLOW}⚙️  Compiling TypeScript...${NC}"
-npx tsc --project tsconfig.json
+# Clean + Parcel build (the only build that actually produces a loadable extension)
+echo -e "${YELLOW}🧼 Cleaning previous build...${NC}"
+rm -rf dist/ .parcel-cache/
 
-# Copy static files
-echo -e "${YELLOW}📋 Copying static files...${NC}"
-cp src/manifest.json dist/
-cp src/popup.html dist/
-cp src/popup.css dist/
-cp src/linkedin-styles.css dist/
-cp -r src/icons dist/
+echo -e "${YELLOW}📦 Building with Parcel (webextension config)...${NC}"
+npm run build
 
-# Validate manifest
+# Validate the Parcel-rewritten manifest
 echo -e "${YELLOW}✅ Validating manifest...${NC}"
 node -e "
 const manifest = require('./dist/manifest.json');
-if (!manifest.name || !manifest.version || !manifest.manifest_version) {
+if (!manifest.name || !manifest.version || manifest.manifest_version !== 3) {
   console.error('❌ Invalid manifest.json');
   process.exit(1);
 }
-console.log('✅ Manifest is valid');
-console.log('📦 Extension:', manifest.name, 'v' + manifest.version);
+console.log('✅ Manifest is valid:', manifest.name, 'v' + manifest.version);
 "
-
-# Check file sizes
-echo -e "${YELLOW}📊 Checking build sizes...${NC}"
-du -sh dist/*
 
 echo -e "${GREEN}✅ Build completed successfully!${NC}"
 echo -e "${GREEN}📁 Build output: ./dist/${NC}"
 
-# Optional: Create a simple size report
-echo -e "\n${YELLOW}📊 Build Size Report:${NC}"
-find dist -type f -name "*.js" -exec du -h {} \; | sort -hr
+echo -e "\n${YELLOW}📊 Build size report:${NC}"
+du -sh dist/* | sort -hr
 echo ""

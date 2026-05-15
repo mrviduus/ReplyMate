@@ -50,9 +50,10 @@ describe('EngagementQueue (T120)', () => {
 
     currentNow = 1_700_000_000_000;
 
-    scoreFeed = jest.fn().mockImplementation(async (posts: ParsedPost[]) =>
-      posts.map((p, i) => makeScoredPost(p, 80 - i * 10)),
-    );
+    scoreFeed = jest.fn().mockImplementation(async (posts: ParsedPost[]) => ({
+      ok: true,
+      scored: posts.map((p, i) => makeScoredPost(p, 80 - i * 10)),
+    }));
     draftComment = jest.fn().mockResolvedValue('Generated draft text.');
     markEngaged = jest.fn().mockResolvedValue(undefined);
     dismiss = jest.fn().mockResolvedValue(undefined);
@@ -121,11 +122,14 @@ describe('EngagementQueue (T120)', () => {
     });
 
     it('filters out posts with category=skip', async () => {
-      scoreFeed.mockImplementationOnce(async (posts: ParsedPost[]) => [
-        makeScoredPost(posts[0], 80),
-        makeScoredPost(posts[1], 25), // skip
-        makeScoredPost(posts[2], 55),
-      ]);
+      scoreFeed.mockImplementationOnce(async (posts: ParsedPost[]) => ({
+        ok: true,
+        scored: [
+          makeScoredPost(posts[0], 80),
+          makeScoredPost(posts[1], 25), // skip
+          makeScoredPost(posts[2], 55),
+        ],
+      }));
       const q = newQueue();
       q.mount(container);
       await q.refresh([makeParsedPost(), makeParsedPost({ id: 'b', authorUrn: 'b' }), makeParsedPost({ id: 'c', authorUrn: 'c' })]);
@@ -151,6 +155,26 @@ describe('EngagementQueue (T120)', () => {
       expect(draftComment).toHaveBeenCalled();
       const draftAreas = container.querySelectorAll('.replymate-queue__draft');
       expect(draftAreas.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('refresh — missing-profile / warning surface', () => {
+    it('renders a warning tile when scoreFeed returns ok=false', async () => {
+      scoreFeed.mockImplementationOnce(async () => ({
+        ok: false,
+        warning: 'Capture your profile first to see ranked posts.',
+      }));
+      const q = newQueue();
+      q.mount(container);
+      await q.refresh([makeParsedPost()]);
+
+      const warning = container.querySelector('.replymate-queue__warning');
+      expect(warning).not.toBeNull();
+      expect(warning?.textContent).toMatch(/Capture your profile/);
+      const tiles = container.querySelectorAll('.replymate-queue__tile');
+      expect(tiles).toHaveLength(0);
+      // No drafting attempted when there are no tiles
+      expect(draftComment).not.toHaveBeenCalled();
     });
   });
 

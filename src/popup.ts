@@ -2,7 +2,9 @@
 
 import "./popup.css";
 import { prebuiltAppConfig } from "@mlc-ai/web-llm";
-import Chart from "chart.js/auto";
+// Chart.js is loaded lazily — see loadChartCtor() below. Static import would
+// pull all chart.js controllers into the popup bundle even when the user
+// never visits the SSI section.
 import { ProfileContextService } from "./profile-context";
 import { renderLatest as renderSsiLatest, renderTrend as renderSsiTrend, getInsight as getSsiInsight } from "./ssi-tracker";
 import { getSsiLastError } from "./storage-schema";
@@ -197,6 +199,16 @@ const ssiOpenPageBtn = getElementAndCheck("ssiOpenPage") as HTMLButtonElement | 
 const ssiMessage = getElementAndCheck("ssiMessage");
 
 let ssiChart: { destroy: () => void } | null = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- chart.js/auto default export
+let cachedChartCtor: any = null;
+
+async function loadChartCtor(): Promise<unknown> {
+  if (!cachedChartCtor) {
+    const mod = await import("chart.js/auto");
+    cachedChartCtor = mod.default;
+  }
+  return cachedChartCtor;
+}
 
 function ssiRefs() {
   return {
@@ -248,7 +260,8 @@ async function loadSsiData(): Promise<void> {
       if (ssiChart) {
         try { ssiChart.destroy(); } catch { /* ignore */ }
       }
-      ssiChart = renderSsiTrend(snapshots, ssiTrendCanvas, Chart as never);
+      const ChartCtor = await loadChartCtor();
+      ssiChart = renderSsiTrend(snapshots, ssiTrendCanvas, ChartCtor as never);
     }
   }
 

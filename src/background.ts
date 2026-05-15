@@ -868,9 +868,11 @@ const SSI_URL = 'https://www.linkedin.com/sales/ssi';
  * Orchestrate one SSI capture:
  *   1. keepAlive.start() (Constitution VII — SW must survive 30s+ flow)
  *   2. Create inactive background tab loading SSI page
- *   3. Wait for content script's ssi.snapshotReady message
- *   4. Close the tab
- *   5. keepAlive.stop()
+ *   3. Watch chrome.tabs.onUpdated for login-redirect — reject early with a
+ *      clear "not signed in" message instead of generic 30s timeout
+ *   4. Wait for content script's ssi.snapshotReady message
+ *   5. Close the tab
+ *   6. keepAlive.stop()
  * Caller persists the snapshot or the failure.
  */
 async function startSsiCapture(): Promise<SsiSnapshot> {
@@ -879,19 +881,44 @@ async function startSsiCapture(): Promise<SsiSnapshot> {
   }
   keepAlive.start();
   let createdTabId: number | undefined;
+  let onUpdatedListener: ((tabId: number, info: chrome.tabs.TabChangeInfo) => void) | null = null;
   try {
     const tab = await chrome.tabs.create({ url: SSI_URL, active: false });
     if (!tab.id) throw new Error('Failed to create background tab');
     createdTabId = tab.id;
+
     const snapshot = await new Promise<SsiSnapshot>((resolve, reject) => {
       const timeoutId = setTimeout(() => {
         pendingSsiCapture = null;
         reject(new Error(`SSI capture timed out after ${SSI_CAPTURE_TIMEOUT_MS / 1000}s`));
       }, SSI_CAPTURE_TIMEOUT_MS);
       pendingSsiCapture = { tabId: tab.id!, resolve, reject, timeoutId };
+
+      // Detect LinkedIn redirecting our background tab away from /sales/ssi —
+      // this typically means the user is not signed in (LinkedIn pushes to
+      // /login or /uas/login). Reject with an actionable message rather than
+      // letting the 30s timeout fire.
+      onUpdatedListener = (tabId, changeInfo) => {
+        if (tabId !== createdTabId) return;
+        const url = changeInfo.url;
+        if (!url) return;
+        const isAwayFromSsi =
+          !url.startsWith('https://www.linkedin.com/sales/ssi') &&
+          (url.includes('/login') || url.includes('/uas/login') || url.includes('/checkpoint'));
+        if (isAwayFromSsi && pendingSsiCapture) {
+          const cap = pendingSsiCapture;
+          pendingSsiCapture = null;
+          clearTimeout(cap.timeoutId);
+          cap.reject(new Error('Not signed in to LinkedIn — sign in and try again.'));
+        }
+      };
+      chrome.tabs.onUpdated.addListener(onUpdatedListener);
     });
     return snapshot;
   } finally {
+    if (onUpdatedListener) {
+      try { chrome.tabs.onUpdated.removeListener(onUpdatedListener); } catch { /* ignore */ }
+    }
     if (createdTabId !== undefined) {
       try { await chrome.tabs.remove(createdTabId); } catch { /* tab may already be gone */ }
     }
@@ -900,8 +927,14 @@ async function startSsiCapture(): Promise<SsiSnapshot> {
   }
 }
 
-// Daily alarm — fires every 1440 minutes.
-chrome.alarms.create(SSI_ALARM_NAME, { periodInMinutes: 1440 });
+// Daily alarm — registered on install/update. chrome.alarms persist across SW
+// suspensions and browser restarts, so we do NOT re-create on every SW wake-up
+// (which would also be redundant — Chrome treats same-name+same-period as a no-op,
+// but onInstalled is the documented pattern).
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.alarms.create(SSI_ALARM_NAME, { periodInMinutes: 1440 });
+  console.log(`⏰ Registered daily SSI alarm: ${SSI_ALARM_NAME} (every 1440 min)`);
+});
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name !== SSI_ALARM_NAME) return;
   console.log('⏰ SSI daily alarm fired');

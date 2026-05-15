@@ -27,8 +27,17 @@ export interface DraftRequest {
   length: LengthKey;
 }
 
+/**
+ * scoreFeed returns a result object so the queue can surface a CTA when
+ * scoring is not possible (e.g. no profile captured yet) instead of silently
+ * rendering an empty list.
+ */
+export type ScoreFeedResult =
+  | { ok: true; scored: ScoredPost[] }
+  | { ok: false; warning: string };
+
 export interface EngagementQueueDeps {
-  scoreFeed?: (posts: ParsedPost[]) => Promise<ScoredPost[]>;
+  scoreFeed?: (posts: ParsedPost[]) => Promise<ScoreFeedResult>;
   draftComment?: (req: DraftRequest) => Promise<string>;
   markEngaged?: (postId: string) => Promise<void>;
   dismiss?: (postId: string) => Promise<void>;
@@ -46,10 +55,12 @@ function defaultCopyToClipboard(text: string): Promise<void> {
 
 function defaultOpenPost(postId: string): void {
   // The activity id format is `urn:li:activity:<digits>`; the canonical post
-  // URL is /feed/update/{urn}/. We do NOT navigate — only open in a new tab so
-  // the user must click Submit themselves.
+  // URL is /feed/update/{urn}/. LinkedIn accepts the URN raw — no URL-encoding
+  // needed (the `:` is valid in path segments and LinkedIn renders the URL
+  // back this way in its own UI). We do NOT navigate — only open in a new
+  // tab so the user must click Submit themselves.
   if (typeof window !== 'undefined') {
-    window.open(`https://www.linkedin.com/feed/update/${encodeURIComponent(postId)}/`, '_blank');
+    window.open(`https://www.linkedin.com/feed/update/${postId}/`, '_blank');
   }
 }
 
@@ -171,14 +182,33 @@ export class EngagementQueue {
     }
     this.lastRefreshAt = now;
 
-    const scored = this.deps.scoreFeed ? await this.deps.scoreFeed(posts) : [];
-    this.currentScored = scored
+    const result: ScoreFeedResult = this.deps.scoreFeed
+      ? await this.deps.scoreFeed(posts)
+      : { ok: true, scored: [] };
+
+    if (!result.ok) {
+      this.currentScored = [];
+      this.renderWarning(result.warning);
+      return;
+    }
+
+    this.currentScored = result.scored
       .filter((s) => s.relevance.category !== 'skip')
       .sort((a, b) => b.relevance.score - a.relevance.score)
       .slice(0, QUEUE_MAX_VISIBLE);
 
     this.renderList();
     await this.regenerateAllVisible();
+  }
+
+  private renderWarning(message: string): void {
+    if (!this.listEl) return;
+    this.listEl.innerHTML = `
+      <div class="replymate-queue__warning" role="status">
+        <i class="fa fa-info-circle replymate-queue__warning-icon" aria-hidden="true"></i>
+        <div class="replymate-queue__warning-text">${esc(message)}</div>
+      </div>
+    `;
   }
 
   private renderList(): void {

@@ -57,7 +57,7 @@ All notable changes to ReplyMate are documented here. Format roughly follows
 
 ---
 
-## [0.3.3] — 2026
+## [0.3.3] — 2025-10-16
 
 Prior versions of ReplyMate (v0.3.x) ship AI reply suggestions on individual LinkedIn posts. v0.4.0 reframes the extension as a complete SSI growth co-pilot.
 

@@ -44,7 +44,15 @@ Marked as scaffold only in v0.4.0 (T400–T402). No manual scenarios this phase.
 
 - [ ] **T214.1**: DevTools → Network → throttle to "Slow 3G". Trigger SSI capture (popup Refresh now or manual `chrome.alarms` fire). Verify capture completes within 30s timeout, OR cleanly fails to `ssiLastError` if LinkedIn slow-loads past 30s.
 - [ ] **T214.2**: chrome://serviceworker-internals — observe SW status during capture. Expected: SW stays "ACTIVATED" throughout the flow. Without keep-alive it would suspend at ~30s idle and lose the snapshotReady message.
-- [ ] **T214.3**: Inspect background console — look for `keepAlive` port messages every 20s while capture runs.
+- [ ] **T214.3**: Verify the keep-alive port is active during the capture. The default `port.postMessage('ping')` has no listener on the other side, so the pings are invisible unless you instrument. From the background page DevTools console, paste this temporarily before triggering capture:
+  ```js
+  chrome.runtime.onConnect.addListener((p) => {
+    if (p.name === 'replymate.keep-alive') {
+      p.onMessage.addListener((m) => console.log('[keep-alive]', m));
+    }
+  });
+  ```
+  Then trigger capture — you should see `[keep-alive] ping` log every ~20s for as long as the capture is in flight. Alternative: inspect `chrome://extensions/` → Service Worker → Ports — the port named `replymate.keep-alive` should appear during the capture and disappear after.
 
 ---
 
