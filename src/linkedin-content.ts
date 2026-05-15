@@ -227,19 +227,33 @@ class LinkedInReplyMate {
     this.isProcessing = true;
 
     try {
-      // LinkedIn post selectors - multiple selectors for different layouts
+      // v0.5.7 — LinkedIn 2026 React SDUI: legacy class names (.feed-shared-update-v2 etc.)
+      // are gone, replaced by hash classes. The STABLE signal is the URN attribute:
+      // `data-urn="urn:li:activity:..."` — LinkedIn's domain model URN scheme that
+      // hasn't changed in 5+ years. Plus `<article>` semantic tag for posts.
       const postSelectors = [
-        '[data-id*="urn:li:activity"]',
+        // Stable URN-based selectors (work across LinkedIn DOM redesigns)
         '[data-urn*="urn:li:activity"]',
+        '[data-id*="urn:li:activity"]',
+        '[data-activity-urn]',
+        // Semantic fallback for 2026 SDUI
+        'article[data-urn]',
+        'article[componentkey*="update"]',
+        // Legacy class names — kept for older LinkedIn page caches; harmless if absent
         '.feed-shared-update-v2',
         'div[class*="occludable-update"]',
         '.feed-shared-update',
         '[data-test-id="main-feed-activity-card"]',
       ];
 
+      const seen = new Set<Element>();
       postSelectors.forEach((selector) => {
         const posts = document.querySelectorAll(selector);
-        posts.forEach((post) => this.processPost(post as HTMLElement));
+        posts.forEach((post) => {
+          if (seen.has(post)) return;
+          seen.add(post);
+          this.processPost(post as HTMLElement);
+        });
       });
     } finally {
       this.isProcessing = false;
@@ -392,21 +406,7 @@ class LinkedInReplyMate {
   }
 
   private injectReplyButton(post: LinkedInPost): void {
-    // Find the comment/action area
-    const actionSelectors = [
-      '.feed-shared-social-actions',
-      '.social-details-social-activity',
-      '[data-test-id="social-actions"]',
-      '.feed-shared-social-action-bar',
-      '.social-actions-buttons',
-    ];
-
-    let actionContainer: Element | null = null;
-    for (const selector of actionSelectors) {
-      actionContainer = post.element.querySelector(selector);
-      if (actionContainer) break;
-    }
-
+    const actionContainer = this.findActionContainer(post.element);
     if (!actionContainer) return;
 
     // Check if button already exists
@@ -419,6 +419,53 @@ class LinkedInReplyMate {
     actionContainer.appendChild(replyButton);
 
     post.hasReplyButton = true;
+  }
+
+  /**
+   * v0.5.7 — Find the action bar (Like/Comment/Share toolbar) inside a post.
+   *
+   * Real-DOM strategy: walk up from the Comment button (whose aria-label is
+   * stable for screen-reader accessibility) to find the toolbar container.
+   * Falls back to legacy class names for older LinkedIn caches.
+   *
+   * Why aria-label="Comment" survives redesigns: it's not a class, it's an
+   * accessibility contract that LinkedIn ships to actual users with assistive
+   * tech. Removing it would regress a11y compliance, so it stays.
+   */
+  private findActionContainer(post: HTMLElement): Element | null {
+    // Legacy class selectors — kept first because they're cheap when they hit
+    const staleSelectors = [
+      '.feed-shared-social-actions',
+      '.social-details-social-activity',
+      '[data-test-id="social-actions"]',
+      '.feed-shared-social-action-bar',
+      '.social-actions-buttons',
+    ];
+    for (const sel of staleSelectors) {
+      const el = post.querySelector(sel);
+      if (el) return el;
+    }
+
+    // v0.5.7 real-DOM strategy: find Comment button by aria-label, walk up to
+    // the toolbar/action-bar container.
+    const commentBtn = post.querySelector(
+      'button[aria-label^="Comment" i], button[aria-label*="omment" i]'
+    );
+    if (!commentBtn) return null;
+
+    // Walk up to the smallest container that holds the action bar.
+    let parent: HTMLElement | null = commentBtn.parentElement;
+    while (parent && parent !== post) {
+      // role="toolbar" is the most explicit signal
+      if (parent.getAttribute('role') === 'toolbar') return parent;
+      // Heuristic: parent containing 3–8 buttons is the action bar
+      // (Like + Comment + Share + Repost/Send is typically 3-5 buttons)
+      const buttonCount = parent.querySelectorAll(':scope > * button, :scope > button').length;
+      if (buttonCount >= 3 && buttonCount <= 8) return parent;
+      parent = parent.parentElement;
+    }
+    // Last resort: the Comment button's immediate parent
+    return commentBtn.parentElement;
   }
 
   private createReplyButton(postId: string): HTMLElement {
