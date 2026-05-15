@@ -63,7 +63,7 @@ jobs:
           cat release-body.md
 
       - name: Create GitHub Release with assets
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
           name: ReplyMate ${{ github.ref_name }}
@@ -72,7 +72,6 @@ jobs:
           fail_on_unmatched_files: true
           files: |
             packages/ReplyMate-v${{ steps.get_version.outputs.VERSION }}.zip
-            packages/ReplyMate-v${{ steps.get_version.outputs.VERSION }}-dev.zip
 
   chrome-web-store:
     runs-on: ubuntu-latest

@@ -574,17 +574,32 @@ function sendProgressToAllTabs(message: Record<string, unknown>) {
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log('🔵 STEP 4: Background received message:', request.action);
 
-  // Pre-initialize engine when LinkedIn content script loads
+  // Pre-initialize engine when LinkedIn content script loads — but ONLY if the
+  // user is in local-provider mode. Cloud users (OpenAI) don't need the 3B
+  // model loaded into VRAM (it would just sit there idle costing power/heat).
+  // Bug fix v0.5.1: was eagerly loading WebLLM regardless of provider config.
   if (request.action === 'linkedinContentScriptReady') {
-    console.log('🚀 LinkedIn detected, pre-initializing AI engine...');
-    ensureEngine()
-      .then(() => {
-        console.log('✅ AI engine pre-initialized for LinkedIn');
-        sendResponse({ engineReady: true, currentModel: currentModel });
+    getProviderConfig()
+      .then((cfg) => {
+        if (cfg.mode === 'openai' && cfg.openai?.apiKey) {
+          console.log('☁️ Cloud mode active — skipping WebLLM warm-up');
+          sendResponse({ engineReady: false, cloudMode: true });
+          return;
+        }
+        console.log('🚀 LinkedIn detected, pre-initializing AI engine...');
+        return ensureEngine()
+          .then(() => {
+            console.log('✅ AI engine pre-initialized for LinkedIn');
+            sendResponse({ engineReady: true, currentModel: currentModel });
+          })
+          .catch((error) => {
+            console.error('❌ Failed to pre-initialize engine:', error);
+            sendResponse({ engineReady: false, error: error.message, currentModel: currentModel });
+          });
       })
       .catch((error) => {
-        console.error('❌ Failed to pre-initialize engine:', error);
-        sendResponse({ engineReady: false, error: error.message, currentModel: currentModel });
+        console.error('❌ Failed to read provider config:', error);
+        sendResponse({ engineReady: false, error: String(error) });
       });
     return true; // Keep channel open for async response
   }

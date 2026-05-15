@@ -4,6 +4,30 @@ All notable changes to ReplyMate are documented here. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows
 [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] — 2026-05-15 — Bug-fix sweep
+
+### Fixed
+
+- **Skip WebLLM warm-up when cloud mode is active** (heat / VRAM fix). Previously the `linkedinContentScriptReady` handler eagerly called `ensureEngine()` regardless of provider config, so the local 3B model loaded into VRAM and stayed there even for users who opted into OpenAI. With ~2 GB stable VRAM use + GPU spikes per generation, this was the dominant heat-source on smaller GPUs (e.g. GTX 1650 Ti 4 GB). Now the warm-up reads `getProviderConfig()` first and skips for cloud users.
+- **Engagement Queue warning icon now renders** (Bug #2 of v0.5.0 dogfood). The injected sidebar lives in the LinkedIn page context which does NOT load Font Awesome (FA is only in popup.html), so `<i class="fa fa-info-circle">` rendered as a 0×0 element. Replaced with inline SVG that ships its own glyph.
+- **`version-bump.sh` no longer fights Prettier** (CI release friction). The script writes `manifest.json` via `JSON.stringify(.., 2)` which conflicts with Prettier's short-array collapse — every bump previously needed a follow-up "style: reformat" commit before CI passed. The script now pipes `manifest.json` through `npx prettier --write` after the version edit.
+- **Duplicate `-dev.zip` removed**. `scripts/package.sh` was emitting both `ReplyMate-vX.Y.Z.zip` and `ReplyMate-vX.Y.Z-dev.zip` but they were byte-identical (Parcel doesn't ship source maps in production, so the `-x "*.map"` exclusion caught nothing). The `-dev` name was misleading. Now ships one canonical ZIP. `release.yml` updated to expect the single file.
+
+### Changed
+
+- `softprops/action-gh-release` bumped `@v2` → `@v3` (v2 entered Node 20 deprecation in 2026; v3 supports Node 24).
+
+### Added
+
+- `scripts/dump-linkedin-profile-dom.js` — paste-into-DevTools probe that snapshots which LinkedIn profile selectors actually exist in 2026. v0.4.0 popup test (see screenshot in commit `b8fd4e6` thread) showed `profile-parser` returns 0 skills and an empty positioning input because the synthetic-fixture selectors don't match real DOM. This script is the next step toward a real-DOM parser fix in v0.5.2.
+
+### Known issues (unchanged from v0.5.0)
+
+- **`profile-parser` mismatched against live LinkedIn DOM** — still produces hallucinated positioning summary from empty parser input. Workaround: opt into OpenAI mode (better quality on the same empty input). Real fix in v0.5.2 once `dump-linkedin-profile-dom.js` snapshot is in hand.
+- Legacy `generateLinkedInReply{,WithComments}` handlers still bypass provider abstraction. v0.5.2.
+
+---
+
 ## [0.5.0] — 2026-05-15 — OpenAI BYOK (opt-in cloud)
 
 ### Added — OpenAI provider
