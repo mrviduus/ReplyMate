@@ -26,31 +26,24 @@ echo -e "${YELLOW}📦 Packaging version: ${VERSION}${NC}"
 # Create packages directory
 mkdir -p packages
 
-# Create ZIP package for Chrome Web Store
+# Single ZIP — what Chrome Web Store expects + what Load-unpacked users dump.
+# Previous version emitted both ${PACKAGE_NAME}.zip and ${PACKAGE_NAME}-dev.zip
+# but they were byte-identical because Parcel doesn't ship source maps in
+# production builds (so `-x "*.map"` excluded nothing). The -dev.zip name
+# was misleading. Dropped in v0.5.1.
 echo -e "${YELLOW}🗜️  Creating ZIP package...${NC}"
 cd dist
-zip -r "../packages/${PACKAGE_NAME}.zip" . -x "*.DS_Store" "*.map"
+zip -r "../packages/${PACKAGE_NAME}.zip" . -x "*.DS_Store" "*.map" >/dev/null
 cd ..
 
-# Create development ZIP (includes source maps if they exist)
-echo -e "${YELLOW}🛠️  Creating development package...${NC}"
-cd dist
-zip -r "../packages/${PACKAGE_NAME}-dev.zip" .
-cd ..
-
-# Verify packages
-echo -e "${YELLOW}✅ Verifying packages...${NC}"
+# Verify package
+echo -e "${YELLOW}✅ Verifying package...${NC}"
 if [ -f "packages/${PACKAGE_NAME}.zip" ]; then
     SIZE=$(du -h "packages/${PACKAGE_NAME}.zip" | cut -f1)
-    echo -e "${GREEN}✅ Production package created: ${PACKAGE_NAME}.zip (${SIZE})${NC}"
+    echo -e "${GREEN}✅ Package created: ${PACKAGE_NAME}.zip (${SIZE})${NC}"
 else
-    echo -e "${RED}❌ Failed to create production package${NC}"
+    echo -e "${RED}❌ Failed to create package${NC}"
     exit 1
-fi
-
-if [ -f "packages/${PACKAGE_NAME}-dev.zip" ]; then
-    SIZE=$(du -h "packages/${PACKAGE_NAME}-dev.zip" | cut -f1)
-    echo -e "${GREEN}✅ Development package created: ${PACKAGE_NAME}-dev.zip (${SIZE})${NC}"
 fi
 
 # Generate package manifest
@@ -60,8 +53,7 @@ cat > "packages/manifest.json" << EOF
   "name": "ReplyMate",
   "version": "${VERSION}",
   "packages": {
-    "production": "${PACKAGE_NAME}.zip",
-    "development": "${PACKAGE_NAME}-dev.zip"
+    "production": "${PACKAGE_NAME}.zip"
   },
   "built_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
   "git_commit": "$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')",

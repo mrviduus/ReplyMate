@@ -202,9 +202,14 @@ export class EngagementQueue {
 
   private renderWarning(message: string): void {
     if (!this.listEl) return;
+    // Inline SVG icon — the sidebar is injected into the LinkedIn page which
+    // does NOT load Font Awesome (FA is only in popup.html), so `<i class="fa ...">`
+    // would render as a 0×0 element. SVG ships its own glyph (Bug #2 fix).
     this.listEl.innerHTML = `
       <div class="replymate-queue__warning" role="status">
-        <i class="fa fa-info-circle replymate-queue__warning-icon" aria-hidden="true"></i>
+        <svg class="replymate-queue__warning-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="currentColor">
+          <path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 5a1.25 1.25 0 110 2.5A1.25 1.25 0 0112 7zm1 11h-2v-7h2v7z"/>
+        </svg>
         <div class="replymate-queue__warning-text">${esc(message)}</div>
       </div>
     `;

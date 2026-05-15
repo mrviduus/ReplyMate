@@ -157,6 +157,16 @@ manifest.version = '${NEW_VERSION}';
 fs.writeFileSync('./src/manifest.json', JSON.stringify(manifest, null, 2) + '\n');
 "
 
+# Re-format the JSON files through prettier so CI's format:check stays green.
+# (Bug fix: JSON.stringify(.., 2) emits multi-line arrays that conflict with
+# prettier's default short-array collapse → CI format:check failed on every
+# release commit. Run prettier here once instead of needing a follow-up
+# "style: reformat after version bump" commit each time.)
+if [[ -d "node_modules/.bin" ]] && [[ -x "node_modules/.bin/prettier" ]]; then
+    echo -e "${YELLOW}🎨 Re-formatting JSON through prettier...${NC}"
+    npx prettier --write src/manifest.json >/dev/null 2>&1 || true
+fi
+
 # Update package.json if it exists
 if [[ -f "package.json" ]]; then
     echo -e "${YELLOW}📝 Updating package.json...${NC}"
