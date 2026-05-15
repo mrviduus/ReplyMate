@@ -4,6 +4,21 @@ All notable changes to ReplyMate are documented here. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows
 [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.7] — 2026-05-15 — Reply button injection: real-DOM rewrite (same fix class as v0.5.6)
+
+### Fixed
+
+- **"Generate Reply" button now appears on feed posts again.** Previously `linkedin-content.ts` searched for `.feed-shared-update-v2` containers and `.feed-shared-social-actions` toolbars — both gone in 2026 React SDUI. Same root cause as v0.5.6's profile-parser bug. Two surgical changes:
+  - **Post discovery**: added `[data-urn*="urn:li:activity"]` (LinkedIn's stable URN attribute scheme) and `article[data-urn]` / `article[componentkey*="update"]` semantic fallbacks. Legacy class names kept for older page caches but no longer load-bearing.
+  - **Action bar discovery (new `findActionContainer` helper)**: find the toolbar by walking up from `button[aria-label*="omment"]` — the Comment button's `aria-label` is an accessibility contract LinkedIn ships to actual screen-reader users, so it survives redesigns that wipe class names. Walk up to `role="toolbar"` ancestor or a parent containing 3–8 buttons (Like + Comment + Share + Repost/Send heuristic).
+- Deduplication: post discovery loop now tracks a `Set<Element>` to avoid processing the same post twice when multiple selectors match.
+
+### Why this works
+
+CSS class names are an implementation detail LinkedIn can churn freely. ARIA labels and `data-urn` attributes are external contracts (a11y, deep-linking) LinkedIn can't break without breaking screen readers and notification links. Heading-anchor strategy in v0.5.6 used the same principle for the profile parser. Pattern: anchor on what LinkedIn promises to keep, not what they happen to call this week.
+
+---
+
 ## [0.5.6] — 2026-05-15 — Real-DOM profile parser rewrite
 
 ### The actual root cause (finally)
