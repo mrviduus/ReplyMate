@@ -38,43 +38,102 @@ export function parseProfileDom(doc: Document | DocumentFragment): RawProfileFie
     return raw.replace(/\s+/g, ' ');
   };
 
-  const fullName = readText(doc.querySelector('.text-heading-xlarge'));
-  const headline = readText(doc.querySelector('.text-body-medium.break-words'));
+  // v0.5.2 — defensive multi-selector parsing per Constitution VI. v0.4.0 dogfood
+  // (see screenshot in commit b8fd4e6 thread) showed real LinkedIn DOM in 2026
+  // doesn't match the v0.4.0 synthetic fixture selectors for headline / about /
+  // skills / activity. Until the dump-linkedin-profile-dom.js snapshot lands,
+  // we try all selectors I've seen LinkedIn use over the past 18 months.
+  const firstMatchText = (selectors: string[]): string => {
+    for (const sel of selectors) {
+      const el = doc.querySelector(sel);
+      const text = readText(el);
+      if (text) return text;
+    }
+    return '';
+  };
 
-  // About — search inside #about for .inline-show-more-text first, else fall back
-  // to any first paragraph-ish element. Truncate hard at ABOUT_MAX_CHARS.
-  const aboutSection = doc.querySelector('#about');
+  const fullName = firstMatchText([
+    '.text-heading-xlarge',
+    'h1.text-heading-xlarge',
+    '.pv-text-details__left-panel h1',
+    '.pv-top-card h1',
+    'main h1',
+  ]);
+
+  const headline = firstMatchText([
+    '.text-body-medium.break-words',
+    '.pv-text-details__left-panel .text-body-medium',
+    '.pv-top-card .text-body-medium',
+    '.ph5 .text-body-medium',
+    'main .text-body-medium',
+  ]);
+
+  // About — try the section anchor, then any of its children that look like
+  // the "see more" expander. Truncate hard at ABOUT_MAX_CHARS.
   let about = '';
+  const aboutSection =
+    doc.querySelector('#about') ??
+    doc.querySelector('section[data-section="summary"]') ??
+    doc.querySelector('section.summary');
   if (aboutSection) {
     const moreText =
       aboutSection.querySelector('.inline-show-more-text') ??
       aboutSection.querySelector('.pv-shared-text-with-see-more') ??
-      aboutSection.querySelector('p');
+      aboutSection.querySelector('p') ??
+      aboutSection;
     about = readText(moreText).slice(0, ABOUT_MAX_CHARS);
-  }
-
-  // Skills — first MAX_TOP_SKILLS items, looking for span.t-bold under each list item.
-  const skillsSection = doc.querySelector('#skills');
-  const topSkills: string[] = [];
-  if (skillsSection) {
-    const items = skillsSection.querySelectorAll('li.pvs-list__paged-list-item');
-    for (let i = 0; i < items.length && topSkills.length < MAX_TOP_SKILLS; i++) {
-      const labelEl = items[i].querySelector('span.t-bold');
-      const text = readText(labelEl);
-      if (text) topSkills.push(text);
+  } else {
+    // Last-ditch: #about may be a sibling-anchor (LinkedIn pattern), so look at
+    // the next .artdeco-card / .pv-profile-card.
+    const aboutAnchor = doc.querySelector('div#about, span#about');
+    const aboutCard =
+      aboutAnchor?.closest('section, div.artdeco-card, div.pv-profile-card') ??
+      aboutAnchor?.parentElement;
+    if (aboutCard) {
+      const moreText =
+        aboutCard.querySelector('.inline-show-more-text') ??
+        aboutCard.querySelector('.pv-shared-text-with-see-more') ??
+        aboutCard;
+      about = readText(moreText).slice(0, ABOUT_MAX_CHARS);
     }
   }
 
-  // Recent post themes — from #content_collections (activity section). Take first
-  // MAX_RECENT_POST_THEMES texts. These are short summaries used downstream by
-  // the prompt builder to keep generated drafts on-brand.
-  const activitySection = doc.querySelector('#content_collections');
+  // Skills — try canonical anchor, fall back to data-section, then to
+  // sibling-anchor pattern. Inside, try multiple list-item shapes.
+  const topSkills: string[] = [];
+  const skillsContainer =
+    doc.querySelector('#skills')?.parentElement ??
+    doc.querySelector('section[data-section="skills"]') ??
+    doc.querySelector('#skills')?.closest('section, div.artdeco-card');
+  if (skillsContainer) {
+    const candidates: NodeListOf<Element> = skillsContainer.querySelectorAll(
+      'li.pvs-list__paged-list-item, li.pvs-entity, .pvs-entity__path-node',
+    );
+    for (let i = 0; i < candidates.length && topSkills.length < MAX_TOP_SKILLS; i++) {
+      // Look for the skill name — prefer .t-bold (LinkedIn's bold style class),
+      // fall back to first .visually-hidden (screenreader text contains skill name).
+      const labelEl =
+        candidates[i].querySelector('span.t-bold') ??
+        candidates[i].querySelector('div.t-bold') ??
+        candidates[i].querySelector('.visually-hidden');
+      const text = readText(labelEl);
+      if (text && !topSkills.includes(text)) topSkills.push(text);
+    }
+  }
+
+  // Recent post themes — analogous defensive pass.
   const recentPostThemes: string[] = [];
-  if (activitySection) {
-    const texts = activitySection.querySelectorAll('.update-components-text');
+  const activityContainer =
+    doc.querySelector('#content_collections') ??
+    doc.querySelector('section[data-section="posts"]') ??
+    doc.querySelector('#content_collections')?.closest('section');
+  if (activityContainer) {
+    const texts = activityContainer.querySelectorAll(
+      '.update-components-text, .feed-shared-update-v2__description, .feed-shared-text',
+    );
     for (let i = 0; i < texts.length && recentPostThemes.length < MAX_RECENT_POST_THEMES; i++) {
       const t = readText(texts[i]);
-      if (t) recentPostThemes.push(t);
+      if (t && !recentPostThemes.includes(t)) recentPostThemes.push(t);
     }
   }
 

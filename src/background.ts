@@ -837,9 +837,33 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
   if (request.action === 'provider.set') {
     setProviderConfig(request.config as ProviderConfig)
+      .then(async () => {
+        // v0.5.2 — auto-unload local engine when switching to a cloud provider.
+        // Otherwise the 3B model would stay in VRAM forever even though we'd
+        // never call generate() on it again. Saves ~2 GB VRAM on the spot.
+        const cfg = request.config as ProviderConfig;
+        if (cfg.mode === 'openai' && cfg.openai?.apiKey) {
+          await unloadEngine().catch((e) => console.warn('Auto-unload failed:', e));
+        }
+        sendResponse({ ok: true });
+      })
+      .catch((err) => sendResponse({ ok: false, error: String(err) }));
+    return true;
+  }
+  // v0.5.2 — manual "Free up GPU memory" button in popup.
+  if (request.action === 'engine.unload') {
+    unloadEngine()
       .then(() => sendResponse({ ok: true }))
       .catch((err) => sendResponse({ ok: false, error: String(err) }));
     return true;
+  }
+  if (request.action === 'engine.status') {
+    sendResponse({
+      ok: true,
+      loaded: engineInitialized && engine !== null,
+      currentModel: engineInitialized ? currentModel : null,
+    });
+    return false;
   }
 
   // T212 — SSI Tracker handlers (Phase C, US2).
@@ -906,6 +930,37 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return false;
   }
 });
+
+/**
+ * v0.5.2 — Explicitly release the WebLLM engine to free VRAM.
+ *
+ * Calls `engine.unload()` (released in @mlc-ai/web-llm) and clears all
+ * engine state. After this, next call to ensureEngine() will reload from
+ * scratch (cache makes that fast — ~5-10s vs cold ~1-3 min).
+ *
+ * Use cases:
+ *   1. User toggles to OpenAI in popup → we auto-unload (no point keeping
+ *      2 GB of weights in VRAM if we'll never call generate() on them).
+ *   2. User clicks "Free up GPU memory" button in popup → manual trigger.
+ *
+ * No-op if engine isn't loaded.
+ */
+async function unloadEngine(): Promise<void> {
+  if (!engine || !engineInitialized) {
+    console.log('🧹 unloadEngine: nothing to unload');
+    return;
+  }
+  console.log('🧹 Unloading WebLLM engine to release VRAM…');
+  try {
+    await engine.unload();
+  } catch (err) {
+    console.warn('engine.unload() threw — clearing state anyway:', err);
+  }
+  engine = null;
+  engineInitialized = false;
+  engineInitializing = false;
+  console.log('✅ Engine unloaded, VRAM should be released within a few seconds.');
+}
 
 // ─── SSI Capture (T211/T212) ──────────────────────────────────────────────
 

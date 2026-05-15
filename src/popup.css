@@ -901,6 +901,17 @@ body {
   color: #6a737d;
   font-weight: normal;
 }
+.provider-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+.provider-actions .btn {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+}
 
 /* SSI Tracker section (T224 — Phase C, US2) */
 .ssi-none {

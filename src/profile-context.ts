@@ -113,6 +113,24 @@ export class ProfileContextService {
     const parsedDoc = new DOMParser().parseFromString(html, 'text/html');
     const rawFields: RawProfileFields = parseProfileDom(parsedDoc);
 
+    // v0.5.2 — sanity check: if EVERY extracted field is empty, the parser
+    // doesn't match the current LinkedIn DOM. Surface a loud error instead of
+    // letting the AI hallucinate a positioning summary from nothing.
+    const parsedAnything =
+      rawFields.fullName ||
+      rawFields.headline ||
+      rawFields.about ||
+      rawFields.topSkills.length > 0 ||
+      rawFields.recentPostThemes.length > 0;
+    if (!parsedAnything) {
+      return {
+        ok: false,
+        reason: 'script-failed',
+        message:
+          "Profile parser couldn't read any fields from this page. LinkedIn's DOM may have changed — please report this. (Tip: run scripts/dump-linkedin-profile-dom.js in DevTools and share the JSON.)",
+      };
+    }
+
     // Step 5 + 6: ship raw fields to background, get positioning summary
     let response: ProfileCaptureResponse;
     try {
