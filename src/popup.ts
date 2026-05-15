@@ -2,6 +2,8 @@
 
 import "./popup.css";
 import { prebuiltAppConfig } from "@mlc-ai/web-llm";
+import { ProfileContextService } from "./profile-context";
+import type { ProfileContext } from "./storage-schema";
 
 // Model configuration for different use cases
 const MODEL_PROFILES = {
@@ -88,6 +90,90 @@ const settingsStatus = getElementAndCheck("settingsStatus");
 // Quick Actions
 const checkStatusBtn = getElementAndCheck("checkStatus") as HTMLButtonElement;
 const reinitModelBtn = getElementAndCheck("reinitModel") as HTMLButtonElement;
+
+// Profile Context (T037)
+const captureProfileBtn = getElementAndCheck("captureProfile") as HTMLButtonElement | null;
+const openMyProfileBtn = getElementAndCheck("openMyProfile") as HTMLButtonElement | null;
+const profileNoneState = getElementAndCheck("profileNoneState");
+const profileCapturedState = getElementAndCheck("profileCapturedState");
+const profileFullName = getElementAndCheck("profileFullName");
+const profileHeadline = getElementAndCheck("profileHeadline");
+const profilePositioning = getElementAndCheck("profilePositioning");
+const profileCapturedAt = getElementAndCheck("profileCapturedAt");
+const profileSkillsCount = getElementAndCheck("profileSkillsCount");
+const profileStaleChip = getElementAndCheck("profileStaleChip");
+const profileMessage = getElementAndCheck("profileMessage");
+const profileService = new ProfileContextService();
+
+function formatRelativeTime(timestamp: number): string {
+  const diffMs = Date.now() - timestamp;
+  const minutes = Math.round(diffMs / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  return `${days}d ago`;
+}
+
+function renderProfile(profile: ProfileContext | null, isStale: boolean): void {
+  if (!profile) {
+    if (profileNoneState) profileNoneState.style.display = '';
+    if (profileCapturedState) profileCapturedState.style.display = 'none';
+    return;
+  }
+  if (profileNoneState) profileNoneState.style.display = 'none';
+  if (profileCapturedState) profileCapturedState.style.display = '';
+  if (profileFullName) profileFullName.textContent = profile.fullName || '(no name)';
+  if (profileHeadline) profileHeadline.textContent = profile.headline || '(no headline)';
+  if (profilePositioning) profilePositioning.textContent = profile.positioningSummary || '(no positioning summary)';
+  if (profileCapturedAt) profileCapturedAt.textContent = formatRelativeTime(profile.capturedAt);
+  if (profileSkillsCount) profileSkillsCount.textContent = String(profile.topSkills.length);
+  if (profileStaleChip) profileStaleChip.style.display = isStale ? '' : 'none';
+}
+
+function showProfileMessage(text: string, kind: 'success' | 'error' | 'info'): void {
+  if (!profileMessage) return;
+  profileMessage.textContent = text;
+  profileMessage.className = `status-message ${kind}`;
+  profileMessage.style.display = '';
+  setTimeout(() => {
+    if (profileMessage) profileMessage.style.display = 'none';
+  }, 6000);
+}
+
+async function refreshProfileDisplay(): Promise<void> {
+  const profile = await profileService.get();
+  const stale = await profileService.shouldRefresh();
+  renderProfile(profile, profile !== null && stale);
+}
+
+async function handleCaptureProfile(): Promise<void> {
+  if (!captureProfileBtn) return;
+  captureProfileBtn.disabled = true;
+  const prevText = captureProfileBtn.innerHTML;
+  captureProfileBtn.innerHTML = '<i class="fa fa-circle-notch fa-spin"></i> Capturing…';
+  try {
+    const result = await profileService.capture();
+    if (result.ok) {
+      showProfileMessage('Profile captured.', 'success');
+      await refreshProfileDisplay();
+    } else {
+      showProfileMessage(result.message, 'error');
+    }
+  } catch (err) {
+    showProfileMessage(`Unexpected error: ${String(err)}`, 'error');
+  } finally {
+    captureProfileBtn.disabled = false;
+    captureProfileBtn.innerHTML = prevText;
+  }
+}
+
+function handleOpenMyProfile(): void {
+  // chrome.tabs.update on the active tab to LinkedIn's "me" redirect endpoint,
+  // which lands the user on their own /in/{handle}/ canonical URL.
+  chrome.tabs.update({ url: 'https://www.linkedin.com/in/me/' });
+}
 
 // Model configuration
 let selectedModel = "";
@@ -723,6 +809,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (reinitModelBtn) {
     reinitModelBtn.addEventListener('click', reinitializeModel);
   }
+
+  // Profile Context wiring (T037)
+  if (captureProfileBtn) captureProfileBtn.addEventListener('click', handleCaptureProfile);
+  if (openMyProfileBtn) openMyProfileBtn.addEventListener('click', handleOpenMyProfile);
+  await refreshProfileDisplay();
 
   // Listen for progress updates from background
   chrome.runtime.onMessage.addListener((message, _sender, _sendResponse) => {

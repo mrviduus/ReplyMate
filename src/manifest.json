@@ -28,7 +28,7 @@
       "run_at": "document_idle"
     }
   ],
-  "permissions": ["storage", "tabs", "activeTab", "windows", "alarms"],
+  "permissions": ["storage", "tabs", "activeTab", "windows", "alarms", "scripting"],
   "host_permissions": ["https://*.linkedin.com/*"],
   "web_accessible_resources": [
     {

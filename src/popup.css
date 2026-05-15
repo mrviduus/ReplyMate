@@ -748,6 +748,71 @@ body {
   }
 }
 
+/* Profile Context section (T038 — Phase A, US3) */
+.profile-status {
+  margin-top: 8px;
+  margin-bottom: 12px;
+}
+.profile-none {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px dashed rgba(0, 0, 0, 0.12);
+  border-radius: 8px;
+  font-size: 13px;
+  color: #586069;
+}
+.profile-captured {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  background: rgba(40, 167, 69, 0.06);
+  border: 1px solid rgba(40, 167, 69, 0.18);
+  border-radius: 8px;
+}
+.profile-row {
+  font-size: 13px;
+  line-height: 1.35;
+}
+.profile-headline {
+  color: #586069;
+}
+.profile-positioning {
+  margin-top: 4px;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 4px;
+  font-style: italic;
+  font-size: 12px;
+}
+.profile-meta {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #6a737d;
+}
+.profile-stale-chip {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  background: #fff3cd;
+  color: #856404;
+  border-radius: 10px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.profile-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.profile-actions .btn {
+  flex: 1;
+}
+
 /* Loading messages styling */
 .loading-stage-message {
   display: flex;

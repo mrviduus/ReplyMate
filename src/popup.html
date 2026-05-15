@@ -37,6 +37,49 @@
 
       <!-- Settings Content -->
       <div id="settings-content" class="settings-main">
+
+        <!-- Profile Context Section (T037 — Phase A, US3) -->
+        <div class="settings-section">
+          <h3>
+            <i class="fa fa-user-circle"></i>
+            Profile Context
+          </h3>
+          <p class="settings-description">
+            Capture your LinkedIn profile so AI drafts read in your voice. Open
+            your own profile page, then click Capture below.
+          </p>
+
+          <div id="profileStatus" class="profile-status">
+            <div id="profileNoneState" class="profile-none">
+              <i class="fa fa-info-circle"></i>
+              <span>No profile captured yet.</span>
+            </div>
+            <div id="profileCapturedState" class="profile-captured" style="display: none;">
+              <div class="profile-row"><strong id="profileFullName">-</strong></div>
+              <div class="profile-row profile-headline" id="profileHeadline">-</div>
+              <div class="profile-row profile-positioning" id="profilePositioning">-</div>
+              <div class="profile-meta">
+                Captured <span id="profileCapturedAt">-</span>
+                · <span id="profileSkillsCount">0</span> skills
+                <span id="profileStaleChip" class="profile-stale-chip" style="display: none;">stale</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="profile-actions">
+            <button id="captureProfile" class="btn btn-primary">
+              <i class="fa fa-camera"></i>
+              Capture Profile
+            </button>
+            <button id="openMyProfile" class="btn btn-secondary">
+              <i class="fa fa-external-link-alt"></i>
+              Open My Profile
+            </button>
+          </div>
+
+          <div id="profileMessage" class="status-message" style="display: none;"></div>
+        </div>
+
         <!-- Model Selection Section -->
         <div class="settings-section">
           <h3>

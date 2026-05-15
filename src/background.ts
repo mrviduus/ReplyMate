@@ -1,5 +1,8 @@
 import { MLCEngineInterface, ChatCompletionMessageParam } from "@mlc-ai/web-llm";
 import OptimizedModelLoader from './model-loader';
+import { keepAlive } from './keep-alive';
+import { buildPositioningPrompt } from './prompt-builder';
+import type { RawProfileFields } from './profile-parser';
 
 console.log('Background service worker loaded');
 
@@ -742,12 +745,67 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     console.log('Popup is ready');
     return false;
   }
+
+  // T036 — Profile capture handler (Phase A, US3).
+  // Receives RawProfileFields from popup (which ran parseProfileDom over the
+  // active /in/{me}/ tab via chrome.scripting.executeScript), builds the
+  // positioning prompt, runs WebLLM, returns the 2-sentence summary.
+  // Wrapped in keepAlive per Constitution VII — cold WebLLM start can exceed
+  // the 30s MV3 SW suspension window.
+  if (request.action === 'profile.capture') {
+    handleProfileCapture(request.fields as RawProfileFields, sendResponse);
+    return true;
+  }
   
   if (request.type === 'SUCCESS_REDIRECT') {
     chrome.tabs.create({ url: 'https://www.linkedin.com/' });
     return false;
   }
 });
+
+async function handleProfileCapture(
+  fields: RawProfileFields,
+  sendResponse: (response: unknown) => void,
+): Promise<void> {
+  keepAlive.start();
+  try {
+    const engine = await ensureEngine();
+    const { system, user } = buildPositioningPrompt({
+      headline: fields.headline,
+      about: fields.about,
+      topSkills: fields.topSkills,
+      recentPostThemes: fields.recentPostThemes,
+    });
+
+    const messages: ChatCompletionMessageParam[] = [
+      { role: 'system', content: system },
+      { role: 'user', content: user },
+    ];
+
+    let summary = '';
+    const completion = await engine.chat.completions.create({
+      stream: true,
+      messages,
+      max_tokens: 120, // 2 sentences ≤40 words fits comfortably
+      temperature: 0.4, // factual/consistent for positioning
+      top_p: 0.9,
+    });
+    for await (const chunk of completion) {
+      const delta = chunk.choices[0]?.delta?.content;
+      if (delta) summary += delta;
+    }
+
+    sendResponse({ ok: true, positioningSummary: summary.trim() });
+  } catch (err) {
+    console.error('profile.capture failed:', err);
+    sendResponse({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  } finally {
+    keepAlive.stop();
+  }
+}
 
 async function handleLinkedInReplyWithComments(
   postContent: string,
