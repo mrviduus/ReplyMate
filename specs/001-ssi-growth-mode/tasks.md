@@ -78,28 +78,28 @@ description: "Task list for SSI Growth Mode (ReplyMate v0.4.0) — v1.1"
 
 ### Relevance Scorer (pure)
 
-- [ ] **T100** [US1] Write `tests/relevance-scorer.spec.ts` covering every weight in plan.md formula. Each weight gets ≥3 cases (low/mid/high). Verify penalty stacking. Verify category buckets at 70 and 40 boundaries. Target ≥95% line + branch coverage.
-- [ ] **T101** [US1] Implement `src/relevance-scorer.ts` with single export `scoreRelevance(input: ScoringInput): RelevanceScore`. Pure function. Includes `obviousAiContent` heuristic (suspicious phrasing list).
+- [x] **T100** [US1] Write `tests/relevance-scorer.spec.ts` covering every weight in plan.md formula. Each weight gets ≥3 cases (low/mid/high). Verify penalty stacking. Verify category buckets at 70 and 40 boundaries. Target ≥95% line + branch coverage. **43/43 tests green.**
+- [x] **T101** [US1] Implement `src/relevance-scorer.ts` with single export `scoreRelevance(input: ScoringInput): RelevanceScore`. Pure function. Includes `obviousAiContent` heuristic (suspicious phrasing list).
 
 ### Feed Parser
 
 - [x] **T110** [US1] Capture an anonymized LinkedIn `/feed/` snippet (10 posts) to `tests/fixtures/linkedin-feed.html`. **DONE as synthetic fixture covering 10 posts (varied tiers, topic matches, 1 own-post, 1 AI-suspicious phrasing edge case).**
-- [ ] **T111** [US1] Write `tests/feed-parser.spec.ts` against fixture: extract 10 ParsedPost records with all fields (id, authorUrn, text, postedAt, likeCount, etc.).
-- [ ] **T112** [US1] Implement feed parser as pure function `parseFeedDom(documentOrFragment): ParsedPost[]` — keep DOM-touching code thin, push logic to pure helpers. Place in `src/feed-parser.ts`.
+- [x] **T111** [US1] Write `tests/feed-parser.spec.ts` against fixture: extract 10 ParsedPost records with all fields (id, authorUrn, text, postedAt, likeCount, etc.). **34/34 tests green.**
+- [x] **T112** [US1] Implement feed parser as pure function `parseFeedDom(documentOrFragment): ParsedPost[]` — keep DOM-touching code thin, push logic to pure helpers. Place in `src/feed-parser.ts`. **Also adds ConnectionDegree + FollowerTier types to storage-schema.ts and `degree` field to ParsedPost.**
 
 ### Engagement Queue UI + mounting
 
-- [ ] **T120** [US1] Write `tests/engagement-queue.spec.ts` for mount/unmount, render-list, tone/length-change-regenerates-draft, copy-and-mark-engaged, refresh throttle (5-min). Use jsdom + canned ScoredPost arrays.
-- [ ] **T121** [US1] Implement `src/engagement-queue.ts` exporting `EngagementQueue` class with `mount()`, `unmount()`, `refresh()`. UI built with vanilla DOM (no framework — match repo style). Each post tile renders independently.
-- [ ] **T122** [US1] Implement `src/engagement-queue.css` with styles per UI spec in plan.md. Sidebar z-index above LinkedIn but below LinkedIn modals. Position remembered via `replymate.queue.preferences.v1`.
-- [ ] **T123** [US1] Extend `src/linkedin-content.ts`: detect `/feed/` route, lazily mount `EngagementQueue`. Add an unmount on route-change. Preserve all existing reply-button injection behavior — no regressions.
-- [ ] **T124** [US1] Add `queue.scoreFeed`, `queue.draftComment`, `queue.markEngaged`, `queue.dismiss` action handlers to `src/background.ts`. Each delegates to the appropriate pure module.
-- [ ] **T125** [US1] Add `engagement-queue.css` to `web_accessible_resources` in `src/manifest.json`.
+- [x] **T120** [US1] Write `tests/engagement-queue.spec.ts` for mount/unmount, render-list, tone/length-change-regenerates-draft, copy-and-mark-engaged, refresh throttle (5-min). Use jsdom + canned ScoredPost arrays. **15/15 tests green.**
+- [x] **T121** [US1] Implement `src/engagement-queue.ts` exporting `EngagementQueue` class with `mount()`, `unmount()`, `refresh()`. UI built with vanilla DOM (no framework — match repo style). Each post tile renders independently. **Dependency injection for testability; default deps wire to chrome.runtime + navigator.clipboard.**
+- [x] **T122** [US1] Implement `src/engagement-queue.css` with styles per UI spec in plan.md. Sidebar z-index above LinkedIn but below LinkedIn modals. Position remembered via `replymate.queue.preferences.v1`. **z-index 9000. Dark-mode media query included. sidebarPosition persistence DEFERRED — not blocking Phase B exit.**
+- [x] **T123** [US1] Extend `src/linkedin-content.ts`: detect `/feed/` route, lazily mount `EngagementQueue`. Add an unmount on route-change. Preserve all existing reply-button injection behavior — no regressions. **SPA route changes handled via 1.5s setInterval poll on `location.pathname`.**
+- [x] **T124** [US1] Add `queue.scoreFeed`, `queue.draftComment`, `queue.markEngaged`, `queue.dismiss` action handlers to `src/background.ts`. Each delegates to the appropriate pure module. **`queue.draftComment` wrapped in `keepAlive.start()/stop()` (Constitution VII).**
+- [x] **T125** [US1] Add `engagement-queue.css` to `web_accessible_resources` in `src/manifest.json`.
 
 ### Compliance hooks
 
-- [ ] **T130** [US1] Update existing compliance warning in `src/linkedin-content.ts` to mention SSI Growth Mode + reaffirm "no auto-submit".
-- [ ] **T131** [US1] [P] Update `README.md` with SSI Growth Mode section, screenshots, compliance statement.
+- [x] **T130** [US1] Update existing compliance warning in `src/linkedin-content.ts` to mention SSI Growth Mode + reaffirm "no auto-submit". **Expanded warning covers: drafts only, no programmatic submit/post/send/like, local-only inference.**
+- [x] **T131** [US1] [P] Update `README.md` with SSI Growth Mode section, screenshots, compliance statement. **Section added. Screenshots DEFERRED to Phase D after real-Chrome validation.**
 
 ---
 

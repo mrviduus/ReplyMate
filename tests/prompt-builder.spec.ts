@@ -28,6 +28,7 @@ const fixturePost = (): ParsedPost => ({
   authorName: 'Andrej Karpathy',
   authorTitle: 'Building Eureka Labs',
   followerTier: 'gt_100k',
+  degree: '1st',
   text: 'MCP is going to reshape how we build agents — tool composition is finally first-class.',
   postedAt: Date.now() - 2 * 60 * 60 * 1000,
   likeCount: 4200,

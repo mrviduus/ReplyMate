@@ -32,7 +32,7 @@
   "host_permissions": ["https://*.linkedin.com/*"],
   "web_accessible_resources": [
     {
-      "resources": ["linkedin-styles.css"],
+      "resources": ["linkedin-styles.css", "engagement-queue.css"],
       "matches": ["https://*.linkedin.com/*"]
     }
   ]

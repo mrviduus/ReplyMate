@@ -41,12 +41,16 @@ export interface ProfileContext {
   capturedAt: number;
 }
 
+export type FollowerTier = 'unknown' | 'lt_1k' | '1k_10k' | '10k_100k' | 'gt_100k';
+export type ConnectionDegree = '1st' | '2nd' | '3rd' | 'follow-only' | 'unknown';
+
 export interface ParsedPost {
   id: string;
   authorUrn: string;
   authorName: string;
   authorTitle: string;
-  followerTier: 'unknown' | 'lt_1k' | '1k_10k' | '10k_100k' | 'gt_100k';
+  followerTier: FollowerTier;
+  degree: ConnectionDegree;
   text: string;
   postedAt: number;
   likeCount: number;
@@ -189,6 +193,27 @@ export async function markEngaged(postId: string): Promise<void> {
 export async function isEngaged(postId: string): Promise<boolean> {
   const active = await getEngagedPosts();
   return active.some((e) => e.postId === postId);
+}
+
+// ─── Dismissed posts ────────────────────────────────────────────────────────
+
+/** Return all dismissed post IDs (forever; user explicitly hid them). */
+export async function getDismissedPostIds(): Promise<string[]> {
+  return (await readKey<string[]>(STORAGE_KEYS.queueDismissed)) ?? [];
+}
+
+/** Add a postId to the dismissed list (idempotent — duplicates ignored). */
+export async function addDismissedPostId(postId: string): Promise<void> {
+  const current = await getDismissedPostIds();
+  if (current.includes(postId)) return;
+  current.push(postId);
+  await writeKey(STORAGE_KEYS.queueDismissed, current);
+}
+
+/** True iff postId is in the dismissed list. */
+export async function isDismissed(postId: string): Promise<boolean> {
+  const list = await getDismissedPostIds();
+  return list.includes(postId);
 }
 
 // ─── Migration ──────────────────────────────────────────────────────────────

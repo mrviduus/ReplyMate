@@ -1,8 +1,17 @@
 import { MLCEngineInterface, ChatCompletionMessageParam } from "@mlc-ai/web-llm";
 import OptimizedModelLoader from './model-loader';
 import { keepAlive } from './keep-alive';
-import { buildPositioningPrompt } from './prompt-builder';
+import { buildPositioningPrompt, buildCommentPrompt } from './prompt-builder';
 import type { RawProfileFields } from './profile-parser';
+import { scoreRelevance } from './relevance-scorer';
+import {
+  getProfile,
+  getEngagedPosts,
+  getDismissedPostIds,
+  markEngaged as storageMarkEngaged,
+  addDismissedPostId,
+} from './storage-schema';
+import type { ParsedPost, ScoredPost, ToneKey, LengthKey } from './storage-schema';
 
 console.log('Background service worker loaded');
 
@@ -746,6 +755,33 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return false;
   }
 
+  // T124 — Engagement Queue handlers (Phase B, US1).
+  if (request.action === 'queue.scoreFeed') {
+    handleQueueScoreFeed(request.posts as ParsedPost[], sendResponse);
+    return true;
+  }
+  if (request.action === 'queue.draftComment') {
+    handleQueueDraftComment(
+      request.post as ParsedPost,
+      request.tone as ToneKey,
+      request.length as LengthKey,
+      sendResponse,
+    );
+    return true;
+  }
+  if (request.action === 'queue.markEngaged') {
+    storageMarkEngaged(request.postId as string)
+      .then(() => sendResponse({ ok: true }))
+      .catch((err) => sendResponse({ ok: false, error: String(err) }));
+    return true;
+  }
+  if (request.action === 'queue.dismiss') {
+    addDismissedPostId(request.postId as string)
+      .then(() => sendResponse({ ok: true }))
+      .catch((err) => sendResponse({ ok: false, error: String(err) }));
+    return true;
+  }
+
   // T036 — Profile capture handler (Phase A, US3).
   // Receives RawProfileFields from popup (which ran parseProfileDom over the
   // active /in/{me}/ tab via chrome.scripting.executeScript), builds the
@@ -762,6 +798,84 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return false;
   }
 });
+
+// T124 — Engagement Queue handlers.
+
+async function handleQueueScoreFeed(
+  posts: ParsedPost[],
+  sendResponse: (response: unknown) => void,
+): Promise<void> {
+  try {
+    const profile = await getProfile();
+    if (!profile) {
+      sendResponse({ ok: false, error: 'No profile captured. Open popup → Capture Profile first.' });
+      return;
+    }
+    const [engaged, dismissed] = await Promise.all([
+      getEngagedPosts(),
+      getDismissedPostIds(),
+    ]);
+    const engagedIds = new Set(engaged.map((e) => e.postId));
+    const dismissedIds = new Set(dismissed);
+    const recentlyDisplayedAuthors: string[] = []; // TODO: track across refreshes
+    const scored: ScoredPost[] = posts.map((p) => ({
+      ...p,
+      relevance: scoreRelevance({
+        post: p,
+        profile,
+        signals: {
+          alreadyEngaged: engagedIds.has(p.id),
+          dismissed: dismissedIds.has(p.id),
+          recentlyDisplayedAuthors,
+        },
+      }),
+    }));
+    sendResponse({ ok: true, scored });
+  } catch (err) {
+    console.error('queue.scoreFeed failed:', err);
+    sendResponse({ ok: false, error: String(err) });
+  }
+}
+
+async function handleQueueDraftComment(
+  post: ParsedPost,
+  tone: ToneKey,
+  length: LengthKey,
+  sendResponse: (response: unknown) => void,
+): Promise<void> {
+  keepAlive.start();
+  try {
+    const profile = await getProfile();
+    if (!profile) {
+      sendResponse({ ok: false, error: 'No profile captured.' });
+      return;
+    }
+    const engine = await ensureEngine();
+    const { system, user } = buildCommentPrompt({ profile, post, tone, length });
+    const messages: ChatCompletionMessageParam[] = [
+      { role: 'system', content: system },
+      { role: 'user', content: user },
+    ];
+    let draft = '';
+    const completion = await engine.chat.completions.create({
+      stream: true,
+      messages,
+      max_tokens: aiMaxTokens,
+      temperature: aiTemperature,
+      top_p: 0.9,
+    });
+    for await (const chunk of completion) {
+      const delta = chunk.choices[0]?.delta?.content;
+      if (delta) draft += delta;
+    }
+    sendResponse({ ok: true, draft: draft.trim() });
+  } catch (err) {
+    console.error('queue.draftComment failed:', err);
+    sendResponse({ ok: false, error: String(err) });
+  } finally {
+    keepAlive.stop();
+  }
+}
 
 async function handleProfileCapture(
   fields: RawProfileFields,

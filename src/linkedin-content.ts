@@ -1,6 +1,10 @@
 // LinkedIn Content Script for ReplyMate Extension
 // Handles post detection, reply generation, and UI injection
 
+import { EngagementQueue } from './engagement-queue';
+import { parseFeedDom } from './feed-parser';
+import type { ParsedPost, ScoredPost } from './storage-schema';
+
 console.log('ReplyMate LinkedIn content script loaded');
 
 interface LinkedInComment {
@@ -22,6 +26,9 @@ class LinkedInReplyMate {
   private posts: Map<string, LinkedInPost> = new Map();
   private observer: MutationObserver | null = null;
   private isProcessing = false;
+  private engagementQueue: EngagementQueue | null = null;
+  private currentPath: string = '';
+  private routePollIntervalId: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
     this.showComplianceWarning();
@@ -29,11 +36,81 @@ class LinkedInReplyMate {
   }
 
   private showComplianceWarning(): void {
+    // T130 — extended for SSI Growth Mode (Phase B, US1).
     console.warn(
-      "⚠️ ReplyMate Extension Notice:\n" +
-      "Automated interactions may violate LinkedIn's Terms of Service.\n" +
+      "⚠️ ReplyMate Extension Notice (SSI Growth Mode):\n" +
+      "• AI-drafted comments are SUGGESTIONS only — you must edit, paste, and submit them yourself.\n" +
+      "• ReplyMate never programmatically clicks LinkedIn submit, post, send, or like buttons.\n" +
+      "• Automated interactions may violate LinkedIn's Terms of Service — review every draft before posting.\n" +
+      "• All AI inference runs locally on your device; no LinkedIn content leaves your browser.\n" +
       "Use this extension responsibly and at your own risk."
     );
+  }
+
+  // T123 — mount EngagementQueue on /feed/ pages.
+  private mountEngagementQueueIfOnFeed(): void {
+    const onFeed = location.pathname.startsWith('/feed');
+    if (onFeed && !this.engagementQueue) {
+      this.engagementQueue = new EngagementQueue({
+        scoreFeed: (posts: ParsedPost[]) =>
+          this.sendQueueMessage<{ scored?: ScoredPost[] }>({ action: 'queue.scoreFeed', posts })
+            .then((r) => r?.scored ?? []),
+        draftComment: (req) =>
+          this.sendQueueMessage<{ draft?: string }>({
+            action: 'queue.draftComment',
+            post: req.post,
+            tone: req.tone,
+            length: req.length,
+          }).then((r) => r?.draft ?? '[Draft unavailable]'),
+        markEngaged: async (postId: string) => {
+          await this.sendQueueMessage({ action: 'queue.markEngaged', postId });
+        },
+        dismiss: async (postId: string) => {
+          await this.sendQueueMessage({ action: 'queue.dismiss', postId });
+        },
+      });
+      this.engagementQueue.mount(document.body);
+
+      // Initial refresh after a short delay so the feed has loaded posts.
+      setTimeout(() => {
+        if (!this.engagementQueue) return;
+        const posts = parseFeedDom(document);
+        void this.engagementQueue.refresh(posts);
+      }, 2500);
+    } else if (!onFeed && this.engagementQueue) {
+      this.engagementQueue.unmount();
+      this.engagementQueue = null;
+    }
+  }
+
+  private sendQueueMessage<T = unknown>(message: object): Promise<T | undefined> {
+    return new Promise((resolve) => {
+      try {
+        chrome.runtime.sendMessage(message, (response: T) => {
+          if (chrome.runtime.lastError) {
+            console.warn('Queue message error:', chrome.runtime.lastError);
+            resolve(undefined);
+            return;
+          }
+          resolve(response);
+        });
+      } catch (err) {
+        console.warn('Queue message threw:', err);
+        resolve(undefined);
+      }
+    });
+  }
+
+  private watchRouteChanges(): void {
+    // LinkedIn is an SPA; poll location.pathname so we mount/unmount the queue
+    // when the user navigates between /feed/ and other surfaces.
+    this.currentPath = location.pathname;
+    this.routePollIntervalId = setInterval(() => {
+      if (location.pathname !== this.currentPath) {
+        this.currentPath = location.pathname;
+        this.mountEngagementQueueIfOnFeed();
+      }
+    }, 1500);
   }
 
   private notifyBackgroundReady(): void {
@@ -71,6 +148,10 @@ class LinkedInReplyMate {
 
     // Process existing posts
     this.processVisiblePosts();
+
+    // T123 — mount Engagement Queue if currently on /feed/ + watch SPA route changes.
+    this.mountEngagementQueueIfOnFeed();
+    this.watchRouteChanges();
 
     // Listen for messages from background/popup
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {

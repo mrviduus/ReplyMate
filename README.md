@@ -36,6 +36,12 @@ npm install && npm run build
 - **Multiple Options**: Regenerate if you want different suggestions
 - **Seamless Integration**: Copy to clipboard or insert directly into comment boxes
 
+### 📈 SSI Growth Mode (v0.4.0, in development)
+- **Profile Context**: Capture your LinkedIn profile once so AI drafts read in your voice.
+- **Engagement Queue**: Sidebar on the feed ranks the top 10 posts by relevance to your positioning and drafts an editable comment for each. Tone (Professional / Friendly / Enthusiastic / Thoughtful) and Length (Brief / Standard / Detailed) are per-session sliders.
+- **SSI Dashboard** *(Phase C — coming)*: daily snapshot of your Social Selling Index with a 30-day trend and an actionable insight.
+- **Compliance-first**: ReplyMate **never** clicks LinkedIn submit/post/send buttons programmatically. Every action is "Copy → paste → edit → you submit." See `specs/001-ssi-growth-mode/spec.md` and `.specify/memory/constitution.md` for the full set of non-negotiables.
+
 ### 🛡️ Privacy & Security
 - **100% Local Processing**: AI runs on your device, no data sent to external servers
 - **No Account Required**: Works without login or data collection
