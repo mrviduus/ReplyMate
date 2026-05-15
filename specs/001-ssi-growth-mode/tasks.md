@@ -132,19 +132,19 @@ description: "Task list for SSI Growth Mode (ReplyMate v0.4.0) — v1.1"
 
 ## Phase D — Polish (Day 10–11)
 
-- [ ] **T300** [FND] Run end-to-end manual scenario per spec acceptance scenarios. Document outcomes in `specs/001-ssi-growth-mode/manual-test-log.md`.
-- [ ] **T301** [FND] [P] Update `CLAUDE.md` with SSI Growth Mode architecture, new file map, new message vocabulary.
-- [ ] **T302** [FND] [P] Add `CHANGELOG.md` entry for v0.4.0.
+- [ ] **T300** [FND] Run end-to-end manual scenario per spec acceptance scenarios. Document outcomes in `specs/001-ssi-growth-mode/manual-test-log.md`. **DEFERRED — requires real Chrome. Skeleton checklist created in `manual-test-log.md`.**
+- [x] **T301** [FND] [P] Update `CLAUDE.md` with SSI Growth Mode architecture, new file map, new message vocabulary. **Rewritten: new modules section, dotted message namespaces, v0.4.0 storage keys, three SSI Growth Mode flows documented.**
+- [x] **T302** [FND] [P] Add `CHANGELOG.md` entry for v0.4.0. **New `CHANGELOG.md` at repo root following Keep-a-Changelog format. Lists all added modules, changed configs, deferred items, compliance posture.**
 - [ ] **T303** [FND] [P] Verify the subsumed-items mapping in `spec.md` §References is still accurate at end of Phase D:
   - "Reply Tone Selector" → confirm US1 FR-014 ships with all 4 tones.
   - "Draft connection requests" → confirm US4 scaffolded in v0.4.0, full UI in v0.4.1.
   - "Compose InMail" → confirm still listed in spec.md Out of Scope (deferred to v0.5.0+).
   - "Reply History" → confirm `EngagedPost` storage exists and is queryable.
   - If any mapping drifted during implementation, update `spec.md` §References, not a separate TODO file (the file no longer exists; spec is the single source of truth).
-- [ ] **T304** [FND] [P] Create `specs/001-ssi-growth-mode/data-model.md` with full storage schema reference (extracted from plan.md for easier onboarding).
-- [ ] **T305** [FND] Run full Constitution gate: `npm run type-check && npm run lint && npm test && npm run build`. All must pass with 0 warnings/errors.
-- [ ] **T306** [FND] Verify zero outbound LLM API calls in DevTools Network panel during a full Engagement Queue session and SSI capture.
-- [ ] **T307** [FND] Verify total `chrome.storage.local` footprint stays under 5 MB after 90 days of simulated snapshots + 30 days of engaged posts (use a seeding script in `scripts/`).
+- [x] **T304** [FND] [P] Create `specs/001-ssi-growth-mode/data-model.md` with full storage schema reference (extracted from plan.md for easier onboarding). **Done. Includes storage layout, constants, all 8 entity types, footprint estimate, caller boundary matrix.**
+- [x] **T305** [FND] Run full Constitution gate: `npm run type-check && npm run lint && npm test && npm run build`. All must pass with 0 warnings/errors.
+- [ ] **T306** [FND] Verify zero outbound LLM API calls in DevTools Network panel during a full Engagement Queue session and SSI capture. **DEFERRED — requires real Chrome. Procedure in `manual-test-log.md`.**
+- [x] **T307** [FND] Verify total `chrome.storage.local` footprint stays under 5 MB after 90 days of simulated snapshots + 30 days of engaged posts (use a seeding script in `scripts/`). **Implemented as automated `tests/storage-footprint.spec.ts` — seeds full worst-case state, asserts under both the 5 MB budget and a tighter 200 KB expected bound. Logs actual KB count.**
 
 ---
 
@@ -152,9 +152,9 @@ description: "Task list for SSI Growth Mode (ReplyMate v0.4.0) — v1.1"
 
 Deferred to v0.4.1 for full UI. v0.4.0 ships the data model, types, and storage hooks so v0.4.1 work is contained.
 
-- [ ] **T400** [US4] Add `ConnectionSuggestion` type + storage helpers in `src/storage-schema.ts` (covered in T011 — verify).
-- [ ] **T401** [US4] Stub `src/connection-suggestor.ts` exporting `ConnectionSuggestor` class with method signatures only (`suggest()`, `markDrafted()`, throwing `NotImplementedError`).
-- [ ] **T402** [US4] Write `tests/connection-suggestor.spec.ts` skeleton (skipped tests with `it.todo`).
+- [x] **T400** [US4] Add `ConnectionSuggestion` type + storage helpers in `src/storage-schema.ts` (covered in T011 — verify). **Verified: `ConnectionSuggestion` exported, keys `connectionsSuggestions` + `connectionsDraftedThisWeek` defined.**
+- [x] **T401** [US4] Stub `src/connection-suggestor.ts` exporting `ConnectionSuggestor` class with method signatures only (`suggest()`, `markDrafted()`, throwing `NotImplementedError`).
+- [x] **T402** [US4] Write `tests/connection-suggestor.spec.ts` skeleton (skipped tests with `it.todo`). **3 export-shape tests + 5 `it.todo` placeholders for v0.4.1.**
 
 ---
 
