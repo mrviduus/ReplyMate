@@ -4,6 +4,7 @@ import { keepAlive } from './keep-alive';
 import { buildPositioningPrompt, buildCommentPrompt } from './prompt-builder';
 import type { RawProfileFields } from './profile-parser';
 import { scoreRelevance } from './relevance-scorer';
+import { getActiveProvider } from './providers';
 import {
   getProfile,
   getEngagedPosts,
@@ -14,8 +15,17 @@ import {
   getSsiHistory,
   setSsiLastError,
   clearSsiLastError,
+  getProviderConfig,
+  setProviderConfig,
 } from './storage-schema';
-import type { ParsedPost, ScoredPost, ToneKey, LengthKey, SsiSnapshot } from './storage-schema';
+import type {
+  ParsedPost,
+  ScoredPost,
+  ToneKey,
+  LengthKey,
+  SsiSnapshot,
+  ProviderConfig,
+} from './storage-schema';
 
 console.log('Background service worker loaded');
 
@@ -803,6 +813,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  // v0.5.0 — Inference provider config handlers.
+  if (request.action === 'provider.get') {
+    getProviderConfig()
+      .then((cfg) => sendResponse({ ok: true, config: cfg }))
+      .catch((err) => sendResponse({ ok: false, error: String(err) }));
+    return true;
+  }
+  if (request.action === 'provider.set') {
+    setProviderConfig(request.config as ProviderConfig)
+      .then(() => sendResponse({ ok: true }))
+      .catch((err) => sendResponse({ ok: false, error: String(err) }));
+    return true;
+  }
+
   // T212 — SSI Tracker handlers (Phase C, US2).
   if (request.action === 'ssi.captureNow') {
     startSsiCapture()
@@ -1027,25 +1051,16 @@ async function handleQueueDraftComment(
       sendResponse({ ok: false, error: 'No profile captured.' });
       return;
     }
-    const engine = await ensureEngine();
+    const provider = await getActiveProvider({ ensureLocalEngine: ensureEngine });
     const { system, user } = buildCommentPrompt({ profile, post, tone, length });
-    const messages: ChatCompletionMessageParam[] = [
-      { role: 'system', content: system },
-      { role: 'user', content: user },
-    ];
-    let draft = '';
-    const completion = await engine.chat.completions.create({
-      stream: true,
-      messages,
-      max_tokens: aiMaxTokens,
+    const draft = await provider.generate({
+      system,
+      user,
+      maxTokens: aiMaxTokens,
       temperature: aiTemperature,
-      top_p: 0.9,
+      topP: 0.9,
     });
-    for await (const chunk of completion) {
-      const delta = chunk.choices[0]?.delta?.content;
-      if (delta) draft += delta;
-    }
-    sendResponse({ ok: true, draft: draft.trim() });
+    sendResponse({ ok: true, draft, provider: provider.name, isCloud: provider.isCloud });
   } catch (err) {
     console.error('queue.draftComment failed:', err);
     sendResponse({ ok: false, error: String(err) });
@@ -1060,7 +1075,7 @@ async function handleProfileCapture(
 ): Promise<void> {
   keepAlive.start();
   try {
-    const engine = await ensureEngine();
+    const provider = await getActiveProvider({ ensureLocalEngine: ensureEngine });
     const { system, user } = buildPositioningPrompt({
       headline: fields.headline,
       about: fields.about,
@@ -1068,25 +1083,20 @@ async function handleProfileCapture(
       recentPostThemes: fields.recentPostThemes,
     });
 
-    const messages: ChatCompletionMessageParam[] = [
-      { role: 'system', content: system },
-      { role: 'user', content: user },
-    ];
-
-    let summary = '';
-    const completion = await engine.chat.completions.create({
-      stream: true,
-      messages,
-      max_tokens: 120, // 2 sentences ≤40 words fits comfortably
+    const positioningSummary = await provider.generate({
+      system,
+      user,
+      maxTokens: 120, // 2 sentences ≤40 words fits comfortably
       temperature: 0.4, // factual/consistent for positioning
-      top_p: 0.9,
+      topP: 0.9,
     });
-    for await (const chunk of completion) {
-      const delta = chunk.choices[0]?.delta?.content;
-      if (delta) summary += delta;
-    }
 
-    sendResponse({ ok: true, positioningSummary: summary.trim() });
+    sendResponse({
+      ok: true,
+      positioningSummary,
+      provider: provider.name,
+      isCloud: provider.isCloud,
+    });
   } catch (err) {
     console.error('profile.capture failed:', err);
     sendResponse({

@@ -324,6 +324,142 @@ function handleSsiOpenPage(): void {
   chrome.tabs.create({ url: 'https://www.linkedin.com/sales/ssi' });
 }
 
+// ─── Inference Provider section (v0.5.0) ───────────────────────────────────
+const providerLocalRadio = getElementAndCheck('providerLocal') as HTMLInputElement | null;
+const providerOpenAIRadio = getElementAndCheck('providerOpenAI') as HTMLInputElement | null;
+const providerOpenAIConfig = getElementAndCheck('providerOpenAIConfig');
+const providerOpenAIKeyInput = getElementAndCheck('providerOpenAIKey') as HTMLInputElement | null;
+const providerOpenAIModelSelect = getElementAndCheck(
+  'providerOpenAIModel'
+) as HTMLSelectElement | null;
+const providerSaveBtn = getElementAndCheck('providerSave') as HTMLButtonElement | null;
+const providerStatus = getElementAndCheck('providerStatus');
+const cloudModeBanner = getElementAndCheck('cloudModeBanner');
+const cloudProviderName = getElementAndCheck('cloudProviderName');
+
+interface ProviderConfigDTO {
+  mode: 'local' | 'openai';
+  openai?: { apiKey: string; model: string; baseUrl?: string };
+}
+
+function showProviderMessage(text: string, kind: 'success' | 'error' | 'info'): void {
+  if (!providerStatus) return;
+  providerStatus.textContent = text;
+  providerStatus.className = `status-message ${kind}`;
+  providerStatus.style.display = '';
+  setTimeout(() => {
+    if (providerStatus) providerStatus.style.display = 'none';
+  }, 6000);
+}
+
+function updateCloudBanner(cfg: ProviderConfigDTO): void {
+  if (!cloudModeBanner) return;
+  if (cfg.mode === 'openai' && cfg.openai?.apiKey && cfg.openai?.model) {
+    cloudModeBanner.style.display = '';
+    if (cloudProviderName) cloudProviderName.textContent = `OpenAI · ${cfg.openai.model}`;
+  } else {
+    cloudModeBanner.style.display = 'none';
+  }
+}
+
+function renderProviderForm(cfg: ProviderConfigDTO): void {
+  if (cfg.mode === 'openai') {
+    if (providerOpenAIRadio) providerOpenAIRadio.checked = true;
+    if (providerOpenAIConfig) providerOpenAIConfig.style.display = '';
+  } else {
+    if (providerLocalRadio) providerLocalRadio.checked = true;
+    if (providerOpenAIConfig) providerOpenAIConfig.style.display = 'none';
+  }
+  if (providerOpenAIKeyInput) {
+    providerOpenAIKeyInput.value = cfg.openai?.apiKey ?? '';
+  }
+  if (providerOpenAIModelSelect && cfg.openai?.model) {
+    // Add option if it isn't in the static list (custom models)
+    const exists = Array.from(providerOpenAIModelSelect.options).some(
+      (o) => o.value === cfg.openai!.model
+    );
+    if (!exists) {
+      const opt = document.createElement('option');
+      opt.value = cfg.openai.model;
+      opt.textContent = `${cfg.openai.model} (custom)`;
+      providerOpenAIModelSelect.appendChild(opt);
+    }
+    providerOpenAIModelSelect.value = cfg.openai.model;
+  }
+  updateCloudBanner(cfg);
+}
+
+async function loadProviderConfig(): Promise<void> {
+  const resp = await new Promise<{ ok: boolean; config?: ProviderConfigDTO }>((resolve) => {
+    chrome.runtime.sendMessage({ action: 'provider.get' }, (r) => {
+      resolve(r ?? { ok: false });
+    });
+  });
+  const cfg = resp.config ?? { mode: 'local' };
+  renderProviderForm(cfg);
+}
+
+function readFormConfig(): ProviderConfigDTO {
+  const mode = providerOpenAIRadio?.checked ? 'openai' : 'local';
+  if (mode === 'local') {
+    return { mode: 'local' };
+  }
+  return {
+    mode: 'openai',
+    openai: {
+      apiKey: providerOpenAIKeyInput?.value.trim() ?? '',
+      model: providerOpenAIModelSelect?.value ?? 'gpt-4o-mini',
+    },
+  };
+}
+
+async function handleProviderSave(): Promise<void> {
+  if (!providerSaveBtn) return;
+  const cfg = readFormConfig();
+  if (cfg.mode === 'openai') {
+    if (!cfg.openai?.apiKey) {
+      showProviderMessage('API key is required for OpenAI mode.', 'error');
+      return;
+    }
+    if (!cfg.openai.apiKey.startsWith('sk-')) {
+      showProviderMessage(
+        'OpenAI keys typically start with "sk-". Save anyway? Click Save again to confirm.',
+        'info'
+      );
+      // Allow user to override by clicking Save again (this message will be replaced below)
+    }
+  }
+  providerSaveBtn.disabled = true;
+  const prev = providerSaveBtn.innerHTML;
+  providerSaveBtn.innerHTML = '<i class="fa fa-circle-notch fa-spin"></i> Saving…';
+  try {
+    const resp = await new Promise<{ ok: boolean; error?: string }>((resolve) => {
+      chrome.runtime.sendMessage({ action: 'provider.set', config: cfg }, (r) => {
+        resolve(r ?? { ok: false, error: 'No response from background' });
+      });
+    });
+    if (resp.ok) {
+      const msg =
+        cfg.mode === 'openai'
+          ? `Saved. Cloud mode active — using ${cfg.openai!.model}.`
+          : 'Saved. Local mode active — zero outbound calls.';
+      showProviderMessage(msg, 'success');
+      updateCloudBanner(cfg);
+    } else {
+      showProviderMessage(`Save failed: ${resp.error ?? 'unknown'}`, 'error');
+    }
+  } finally {
+    providerSaveBtn.disabled = false;
+    providerSaveBtn.innerHTML = prev;
+  }
+}
+
+function handleProviderModeChange(): void {
+  if (providerOpenAIConfig) {
+    providerOpenAIConfig.style.display = providerOpenAIRadio?.checked ? '' : 'none';
+  }
+}
+
 // Model configuration
 let selectedModel = '';
 let actualActiveModel = ''; // The model actually running in background
@@ -1012,6 +1148,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (ssiRefreshBtn) ssiRefreshBtn.addEventListener('click', handleSsiRefresh);
   if (ssiOpenPageBtn) ssiOpenPageBtn.addEventListener('click', handleSsiOpenPage);
   await loadSsiData();
+
+  // Inference Provider wiring (v0.5.0)
+  if (providerLocalRadio) providerLocalRadio.addEventListener('change', handleProviderModeChange);
+  if (providerOpenAIRadio) providerOpenAIRadio.addEventListener('change', handleProviderModeChange);
+  if (providerSaveBtn) providerSaveBtn.addEventListener('click', handleProviderSave);
+  await loadProviderConfig();
 
   // Listen for progress updates from background
   chrome.runtime.onMessage.addListener((message, _sender, _sendResponse) => {

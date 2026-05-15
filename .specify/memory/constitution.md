@@ -1,4 +1,31 @@
 <!--
+Sync Impact Report — v1.2.0 (2026-05-15)
+=========================================
+Version bump: 1.1.0 → 1.2.0 (MINOR — material clarification of Principle I; new
+opt-in cloud carve-out. No principle removed. SC-008 redefined in attached spec.)
+
+Principle I changed:
+  - "All AI inference MUST occur locally on the user's device" → "All AI inference
+    occurs locally on the user's device BY DEFAULT. User-initiated opt-in to a
+    remote provider (BYOK) is permitted under a closed-list carve-out with
+    persistent visual indicator + amber compliance banner + per-call transparency
+    of the active provider name in message responses."
+  - Rationale: the local-first value prop stands. Users with their own OpenAI key
+    can opt into a higher-quality provider, with full disclosure of compliance
+    surface (LinkedIn TOS, data egress to OpenAI logs). Opt-in is per-browser-
+    profile, never synced; default remains local.
+
+Principles added: (none)
+Principles removed: (none)
+
+Spec / template alignment required:
+  - specs/001-ssi-growth-mode/spec.md SC-008 ("Zero outbound LLM API calls") →
+    must be re-worded to "Zero outbound LLM API calls when in default mode"
+  - specs/001-ssi-growth-mode/spec.md Compliance Constraint #3 (All inference local)
+    → must be re-worded to acknowledge opt-in carve-out
+  - CHANGELOG.md v0.5.0 entry documents the user-visible impact
+
+────────────────────────────────────────
 Sync Impact Report — v1.1.0 (2026-05-14)
 =========================================
 Version bump: 1.0.0 → 1.1.0 (MINOR — added principles VII–VIII; clarified II/IV/V; no removals)
@@ -34,24 +61,35 @@ Privacy-Focused AI Chrome Extension Architecture
 
 ## Core Principles
 
-### I. Privacy-First Architecture (NON-NEGOTIABLE)
-All AI inference MUST occur locally on the user's device. No user data, LinkedIn content, or generated replies may be transmitted to external servers.
+### I. Privacy-First Architecture (NON-NEGOTIABLE for defaults; opt-in carve-out for cloud)
+All AI inference occurs locally on the user's device **by default**. The extension ships local-first and zero outbound LLM calls in default state.
 
-**Requirements:**
-- WebLLM for on-device AI processing only
-- No external API calls for user content or inference
+A **user-initiated opt-in carve-out** permits a remote inference provider, subject to ALL of the following:
+
+1. **Off by default.** Fresh install, fresh browser profile, or first run after a major-version migration MUST land users in local mode. No flag in storage = local.
+2. **BYOK only.** ReplyMate never ships with bundled API credentials. The user pastes their own key in popup settings; it persists in `chrome.storage.local` (NEVER `chrome.storage.sync` — keys are per-device secrets).
+3. **Closed allow-list.** Only providers whitelisted by a constitution amendment may be selected. As of v1.2.0: `openai` (OpenAI's `api.openai.com/v1/chat/completions`). New providers require a version bump + Sync Impact Report.
+4. **Persistent honest UI when active:**
+   - Amber **cloud-mode banner** at the top of every popup open, naming the active provider and model
+   - Compliance warning in `linkedin-content.ts` console log explicitly mentions cloud egress when active
+   - Every message response from background to popup/content includes `provider` (name) + `isCloud` (boolean) so any caller can show a per-action chip
+5. **No proxying / no anonymizing claims.** The extension does NOT route data through an intermediary, does NOT add encryption-at-rest beyond what `chrome.storage.local` provides, and does NOT promise the cloud provider won't log. The opt-in is the user's eyes-open choice.
+6. **CSP-restricted egress.** Only the whitelisted provider domain (`https://api.openai.com`) appears in `connect-src`. New provider domains require manifest + Constitution co-update.
+
+**Requirements (regardless of mode):**
 - Chrome storage limited to user settings, preferences, captured-locally artifacts (profile context, SSI snapshots, drafts)
-- LinkedIn DOM content must never leave the browser context
-- All model downloads through WebLLM's CDN only (models, not data)
+- LinkedIn DOM content must never leave the browser context **except via the opted-in cloud provider, per the user's explicit selection**
+- All local-model downloads through WebLLM's CDN only (models, not data)
 - Content scripts must sanitize data before processing
+- API keys NEVER logged to console, NEVER included in error messages, NEVER transmitted to anywhere other than the configured provider
 
-**Background-tab carve-outs (closed list).** The extension MAY load LinkedIn pages in inactive background tabs ONLY for these specific read-only captures:
+**Background-tab carve-outs (closed list).** Independent of inference provider, the extension MAY load LinkedIn pages in inactive background tabs ONLY for these specific read-only captures:
 1. `https://www.linkedin.com/sales/ssi` — daily SSI score snapshot
 2. `https://www.linkedin.com/in/{me}/` — user's own profile (capture + auto-refresh)
 
 Both MUST be read-only DOM parse, MUST close the tab when done, MUST NOT click any submit/post/send buttons, and MUST be scoped to the authenticated user's own resource. Any new background-load target requires a constitution amendment, not a feature spec.
 
-**Rationale:** Users trust ReplyMate with sensitive professional communications. Privacy is our core value proposition and competitive advantage. Closed-list carve-outs keep the privacy story enforceable as features grow.
+**Rationale:** The local-first default protects the privacy-conscious majority and remains the marketing story. The opt-in carve-out acknowledges that for users with a paid OpenAI account, quality of generation is materially higher than what a 3B local model can produce, and forcing them to a worse experience for ideological purity is anti-user. The honest UI (banner + per-call provider name) keeps the user constantly aware that they are sending data out, so opt-in stays a conscious choice, not silent drift.
 
 ### II. Quality Gates (MANDATORY PRE-COMMIT)
 Every code change must pass all quality gates before merge. Build failures block deployment.
@@ -290,4 +328,4 @@ This constitution supersedes all other development practices, guidelines, or con
 ### Runtime Guidance
 For day-to-day development questions, consult CLAUDE.md. For architectural decisions or principle interpretation, reference this constitution.
 
-**Version**: 1.1.0 | **Ratified**: 2025-10-13 | **Last Amended**: 2026-05-14
+**Version**: 1.2.0 | **Ratified**: 2025-10-13 | **Last Amended**: 2026-05-15
