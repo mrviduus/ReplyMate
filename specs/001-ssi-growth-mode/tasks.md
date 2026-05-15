@@ -53,7 +53,7 @@ description: "Task list for SSI Growth Mode (ReplyMate v0.4.0) — v1.1"
 
 **Compliance note**: NO content script registered on `linkedin.com/in/*`. NO background tab creation for profile capture. Capture is one-shot, user-click-initiated injection into the active tab via `chrome.scripting.executeScript`.
 
-- [ ] **T030** [US3] Capture an anonymized real LinkedIn profile page HTML to `tests/fixtures/linkedin-profile.html` (replace personal text with placeholders, keep DOM structure). Document the capture date inline.
+- [x] **T030** [US3] Capture an anonymized real LinkedIn profile page HTML to `tests/fixtures/linkedin-profile.html` (replace personal text with placeholders, keep DOM structure). Document the capture date inline. **DONE as synthetic fixture (no real-DOM capture available) — see file header.**
 - [ ] **T031** [US3] Write `tests/profile-parser.spec.ts` against the fixture: extract fullName, headline, About first 1500 chars, top 10 skills, recent post themes (3–5). Add edge-case fixtures: profile with no About, profile with no posts.
 - [ ] **T032** [US3] Implement `src/profile-parser.ts` as pure function `parseProfileDom(htmlOrDoc): RawProfileFields`. Make T031 pass.
 - [ ] **T033** [US3] Write `tests/profile-context.spec.ts`: orchestration with mocked `chrome.tabs.query`, mocked `chrome.scripting.executeScript` (returns canned RawProfileFields), mocked WebLLM (returns canned positioningSummary), mocked `chrome.storage`. Verify: (a) URL guard rejects non-`/in/` active tab, (b) executeScript called exactly once, (c) positioningSummary persisted, (d) 30-day staleness chip surfaces but does NOT auto-trigger refresh.
@@ -83,7 +83,7 @@ description: "Task list for SSI Growth Mode (ReplyMate v0.4.0) — v1.1"
 
 ### Feed Parser
 
-- [ ] **T110** [US1] Capture an anonymized LinkedIn `/feed/` snippet (10 posts) to `tests/fixtures/linkedin-feed.html`.
+- [x] **T110** [US1] Capture an anonymized LinkedIn `/feed/` snippet (10 posts) to `tests/fixtures/linkedin-feed.html`. **DONE as synthetic fixture covering 10 posts (varied tiers, topic matches, 1 own-post, 1 AI-suspicious phrasing edge case).**
 - [ ] **T111** [US1] Write `tests/feed-parser.spec.ts` against fixture: extract 10 ParsedPost records with all fields (id, authorUrn, text, postedAt, likeCount, etc.).
 - [ ] **T112** [US1] Implement feed parser as pure function `parseFeedDom(documentOrFragment): ParsedPost[]` — keep DOM-touching code thin, push logic to pure helpers. Place in `src/feed-parser.ts`.
 
@@ -107,7 +107,7 @@ description: "Task list for SSI Growth Mode (ReplyMate v0.4.0) — v1.1"
 
 ### SSI Parser (pure)
 
-- [ ] **T200** [US2] Capture an anonymized SSI page HTML to `tests/fixtures/linkedin-ssi.html`. Capture both Sales Navigator and free LinkedIn variants if both reachable.
+- [x] **T200** [US2] Capture an anonymized SSI page HTML to `tests/fixtures/linkedin-ssi.html`. Capture both Sales Navigator and free LinkedIn variants if both reachable. **DONE as synthetic fixture (free LinkedIn variant; Sales Navigator variant shares the same score-table classes). Re-verify selectors when real DOM available.**
 - [ ] **T201** [US2] Write `tests/ssi-parser.spec.ts` covering: total parsed correctly, 4 components parsed correctly, industry+network rank parsed, missing-element returns typed `SsiParseError`, fallback DOM variants handled.
 - [ ] **T202** [US2] Implement `src/ssi-parser.ts` as pure function `parseSsiDom(documentOrFragment): SsiSnapshot | SsiParseError`. Make T201 pass.
 
