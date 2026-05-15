@@ -87,11 +87,30 @@ export class ProfileContextService {
     }
 
     // Step 3: inject an HTML-grab function. Parser runs in popup context (step 4).
+    //
+    // v0.5.6 — LinkedIn migrated to React Server-Driven UI (SDUI). The initial
+    // HTML only contains top-card (name/headline/location). About / Skills /
+    // Activity sections are EMPTY placeholders (`<div componentkey="...">`) that
+    // get filled via async XHR after the user scrolls them into view.
+    //
+    // So we scroll the page programmatically, wait for SDUI to fetch the async
+    // sections, then grab the HTML. ~3.5s total wait inside keepAlive.
     let html: string | null = null;
     try {
       const results = await chrome.scripting.executeScript({
         target: { tabId: activeTab.id },
-        func: () => document.documentElement.outerHTML,
+        func: async () => {
+          const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+          const originalScroll = window.scrollY;
+          // Scroll to ~mid then bottom to trigger lazy section loads
+          window.scrollTo({ top: document.body.scrollHeight / 2, behavior: 'instant' });
+          await wait(1500);
+          window.scrollTo({ top: document.body.scrollHeight, behavior: 'instant' });
+          await wait(1500);
+          window.scrollTo({ top: originalScroll, behavior: 'instant' });
+          await wait(300);
+          return document.documentElement.outerHTML;
+        },
       });
       html = (results?.[0]?.result as string | undefined) ?? null;
     } catch (err) {
