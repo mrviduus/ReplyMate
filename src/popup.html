@@ -173,6 +173,14 @@
               <div class="ssi-rank-row">
                 Industry: <strong id="ssiIndustry">—</strong> · Network: <strong id="ssiNetwork">—</strong>
               </div>
+              <!-- v0.5.3 — donut chart matching LinkedIn's /sales/ssi visual -->
+              <div class="ssi-donut-wrapper">
+                <canvas id="ssiDonutCanvas" width="160" height="160" aria-label="SSI components breakdown"></canvas>
+                <div class="ssi-donut-center">
+                  <div class="ssi-donut-center__total" id="ssiDonutTotal">—</div>
+                  <div class="ssi-donut-center__label">/ 100</div>
+                </div>
+              </div>
               <div class="ssi-components-grid">
                 <div class="ssi-component">
                   <span class="ssi-component-label">Brand</span>

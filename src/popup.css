@@ -953,6 +953,38 @@ body {
   font-size: 12px;
   color: #586069;
 }
+.ssi-donut-wrapper {
+  position: relative;
+  width: 160px;
+  height: 160px;
+  margin: 8px auto 4px;
+}
+.ssi-donut-wrapper canvas {
+  width: 160px !important;
+  height: 160px !important;
+  display: block;
+}
+.ssi-donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.ssi-donut-center__total {
+  font-size: 32px;
+  font-weight: 700;
+  color: #0a66c2;
+  line-height: 1;
+}
+.ssi-donut-center__label {
+  font-size: 11px;
+  color: #6a737d;
+  margin-top: 2px;
+}
+
 .ssi-components-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
