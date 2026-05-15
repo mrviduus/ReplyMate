@@ -4,6 +4,32 @@ All notable changes to ReplyMate are documented here. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows
 [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] — 2026-05-15 — VRAM unload, defensive parsing, action deprecation
+
+### Fixed
+
+- **Local WebLLM model can now be explicitly unloaded from VRAM.** v0.5.1 fixed the warm-up trigger (don't load in cloud mode), but a model that was ALREADY loaded would sit in VRAM forever — `keepAlive` + Chrome's MV3 lifecycle never released it. New `engine.unload` message handler calls WebLLM's `engine.unload()` and clears state. Two trigger paths:
+  1. **Auto** — when the user saves OpenAI provider config in popup, background drops the local engine automatically (Bug #3 from v0.5.1 dogfood thread).
+  2. **Manual** — new "Free up GPU memory" button next to Save in the popup Provider section.
+- **Profile parser is now defensive against LinkedIn DOM changes** (partial fix for Bug #1). Each field tries 3–5 selector variants (anchor `#about` AND `section[data-section="summary"]` AND `section.summary`; skill labels try `.t-bold` AND `.visually-hidden`; etc.) per Constitution VI. Survives ~18 months of LinkedIn A/B-test churn.
+- **Loud failure when parser extracts ZERO fields** instead of hallucinating. `profile-context.ts` now returns `script-failed` with an actionable message ("LinkedIn's DOM may have changed — run scripts/dump-linkedin-profile-dom.js and share the JSON") if EVERY parsed field comes back empty. v0.4.0 + v0.5.0 silently fed empty fields to the LLM which then invented a "marketing consultant" persona.
+
+### Changed
+
+- `actions/checkout` bumped `@v4` → `@v6` across ci.yml, code-quality.yml, release.yml (Node 20 deprecation; forced cutover June 2 2026).
+- `actions/setup-node` bumped `@v4` → `@v6` across all 3 workflows for the same reason.
+
+### Known issues (carried forward)
+
+- **Real-DOM parser fix still pending** — defensive selectors raise the odds of partial success, but the canonical fix requires `scripts/dump-linkedin-profile-dom.js` output from a live profile. Workaround: opt into OpenAI; quality is independent of parser since LLM is given whatever fields parsed (even partial).
+- Legacy `generateLinkedInReply{,WithComments}` handlers still bypass provider abstraction. Tracked for v0.5.3.
+
+### Architectural note
+
+The earlier Bug Report ("keepAlive blocks Chrome SW unload → WebLLM permanent VRAM") was correct as a fact but only half the diagnosis. Even without keepAlive, WebLLM's engine reference holds WebGPU buffers that the GC can't reclaim while the SW process lives. `engine.unload()` (WebLLM API) is the only correct release path. Now wired.
+
+---
+
 ## [0.5.1] — 2026-05-15 — Bug-fix sweep
 
 ### Fixed

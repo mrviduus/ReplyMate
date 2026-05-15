@@ -91,10 +91,20 @@
             </label>
           </div>
 
-          <button id="providerSave" class="btn btn-primary">
-            <i class="fa fa-save"></i>
-            Save Provider Settings
-          </button>
+          <div class="provider-actions">
+            <button id="providerSave" class="btn btn-primary">
+              <i class="fa fa-save"></i>
+              Save Provider Settings
+            </button>
+            <button
+              id="providerUnload"
+              class="btn btn-secondary"
+              title="Release local model VRAM. Next local generation reloads from cache (~10s)."
+            >
+              <i class="fa fa-eraser"></i>
+              Free up GPU memory
+            </button>
+          </div>
 
           <div id="providerStatus" class="status-message" style="display: none"></div>
         </div>

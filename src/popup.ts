@@ -333,6 +333,7 @@ const providerOpenAIModelSelect = getElementAndCheck(
   'providerOpenAIModel'
 ) as HTMLSelectElement | null;
 const providerSaveBtn = getElementAndCheck('providerSave') as HTMLButtonElement | null;
+const providerUnloadBtn = getElementAndCheck('providerUnload') as HTMLButtonElement | null;
 const providerStatus = getElementAndCheck('providerStatus');
 const cloudModeBanner = getElementAndCheck('cloudModeBanner');
 const cloudProviderName = getElementAndCheck('cloudProviderName');
@@ -457,6 +458,28 @@ async function handleProviderSave(): Promise<void> {
 function handleProviderModeChange(): void {
   if (providerOpenAIConfig) {
     providerOpenAIConfig.style.display = providerOpenAIRadio?.checked ? '' : 'none';
+  }
+}
+
+async function handleProviderUnload(): Promise<void> {
+  if (!providerUnloadBtn) return;
+  providerUnloadBtn.disabled = true;
+  const prev = providerUnloadBtn.innerHTML;
+  providerUnloadBtn.innerHTML = '<i class="fa fa-circle-notch fa-spin"></i> Unloading…';
+  try {
+    const resp = await new Promise<{ ok: boolean; error?: string }>((resolve) => {
+      chrome.runtime.sendMessage({ action: 'engine.unload' }, (r) => {
+        resolve(r ?? { ok: false, error: 'No response from background' });
+      });
+    });
+    if (resp.ok) {
+      showProviderMessage('Local model unloaded. VRAM should free up within seconds.', 'success');
+    } else {
+      showProviderMessage(`Unload failed: ${resp.error ?? 'unknown'}`, 'error');
+    }
+  } finally {
+    providerUnloadBtn.disabled = false;
+    providerUnloadBtn.innerHTML = prev;
   }
 }
 
@@ -1153,6 +1176,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (providerLocalRadio) providerLocalRadio.addEventListener('change', handleProviderModeChange);
   if (providerOpenAIRadio) providerOpenAIRadio.addEventListener('change', handleProviderModeChange);
   if (providerSaveBtn) providerSaveBtn.addEventListener('click', handleProviderSave);
+  if (providerUnloadBtn) providerUnloadBtn.addEventListener('click', handleProviderUnload);
   await loadProviderConfig();
 
   // Listen for progress updates from background
