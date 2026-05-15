@@ -195,6 +195,23 @@ export async function isEngaged(postId: string): Promise<boolean> {
   return active.some((e) => e.postId === postId);
 }
 
+// ─── SSI last-error chip ────────────────────────────────────────────────────
+
+/** Read the most recent SSI capture failure (or null). Surfaced as popup chip. */
+export async function getSsiLastError(): Promise<SsiLastError | null> {
+  return readKey<SsiLastError>(STORAGE_KEYS.ssiLastError);
+}
+
+/** Persist a capture failure for the popup chip. Background calls this. */
+export async function setSsiLastError(err: SsiLastError): Promise<void> {
+  await writeKey(STORAGE_KEYS.ssiLastError, err);
+}
+
+/** Clear the SSI last-error chip after a successful capture. */
+export async function clearSsiLastError(): Promise<void> {
+  await chrome.storage.local.remove(STORAGE_KEYS.ssiLastError);
+}
+
 // ─── Dismissed posts ────────────────────────────────────────────────────────
 
 /** Return all dismissed post IDs (forever; user explicitly hid them). */

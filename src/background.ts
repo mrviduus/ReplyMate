@@ -10,8 +10,12 @@ import {
   getDismissedPostIds,
   markEngaged as storageMarkEngaged,
   addDismissedPostId,
+  appendSsiSnapshot,
+  getSsiHistory,
+  setSsiLastError,
+  clearSsiLastError,
 } from './storage-schema';
-import type { ParsedPost, ScoredPost, ToneKey, LengthKey } from './storage-schema';
+import type { ParsedPost, ScoredPost, ToneKey, LengthKey, SsiSnapshot } from './storage-schema';
 
 console.log('Background service worker loaded');
 
@@ -782,6 +786,54 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  // T212 — SSI Tracker handlers (Phase C, US2).
+  if (request.action === 'ssi.captureNow') {
+    startSsiCapture()
+      .then(async (snap) => {
+        await appendSsiSnapshot(snap);
+        await clearSsiLastError();
+        sendResponse({ ok: true, snapshot: snap });
+      })
+      .catch(async (err) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        await setSsiLastError({ message: msg, capturedAt: Date.now() });
+        sendResponse({ ok: false, error: msg });
+      });
+    return true;
+  }
+  if (request.action === 'ssi.getHistory') {
+    getSsiHistory()
+      .then((snapshots) => {
+        const days = request.days as number | undefined;
+        if (days && days > 0) {
+          const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+          sendResponse({ snapshots: snapshots.filter((s) => s.capturedAt >= cutoff) });
+        } else {
+          sendResponse({ snapshots });
+        }
+      })
+      .catch((err) => sendResponse({ snapshots: [], error: String(err) }));
+    return true;
+  }
+  if (request.action === 'ssi.snapshotReady') {
+    if (request.snapshot && pendingSsiCapture) {
+      const cap = pendingSsiCapture;
+      pendingSsiCapture = null;
+      clearTimeout(cap.timeoutId);
+      cap.resolve(request.snapshot as SsiSnapshot);
+      sendResponse({ stored: true });
+    } else if (request.error && pendingSsiCapture) {
+      const cap = pendingSsiCapture;
+      pendingSsiCapture = null;
+      clearTimeout(cap.timeoutId);
+      cap.reject(new Error(String(request.error)));
+      sendResponse({ stored: false });
+    } else {
+      sendResponse({ stored: false });
+    }
+    return false;
+  }
+
   // T036 — Profile capture handler (Phase A, US3).
   // Receives RawProfileFields from popup (which ran parseProfileDom over the
   // active /in/{me}/ tab via chrome.scripting.executeScript), builds the
@@ -797,6 +849,73 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     chrome.tabs.create({ url: 'https://www.linkedin.com/' });
     return false;
   }
+});
+
+// ─── SSI Capture (T211/T212) ──────────────────────────────────────────────
+
+interface PendingSsiCapture {
+  tabId: number;
+  resolve: (snap: SsiSnapshot) => void;
+  reject: (err: Error) => void;
+  timeoutId: ReturnType<typeof setTimeout>;
+}
+let pendingSsiCapture: PendingSsiCapture | null = null;
+const SSI_CAPTURE_TIMEOUT_MS = 30_000;
+const SSI_ALARM_NAME = 'replymate.ssi.daily';
+const SSI_URL = 'https://www.linkedin.com/sales/ssi';
+
+/**
+ * Orchestrate one SSI capture:
+ *   1. keepAlive.start() (Constitution VII — SW must survive 30s+ flow)
+ *   2. Create inactive background tab loading SSI page
+ *   3. Wait for content script's ssi.snapshotReady message
+ *   4. Close the tab
+ *   5. keepAlive.stop()
+ * Caller persists the snapshot or the failure.
+ */
+async function startSsiCapture(): Promise<SsiSnapshot> {
+  if (pendingSsiCapture) {
+    throw new Error('SSI capture already in progress');
+  }
+  keepAlive.start();
+  let createdTabId: number | undefined;
+  try {
+    const tab = await chrome.tabs.create({ url: SSI_URL, active: false });
+    if (!tab.id) throw new Error('Failed to create background tab');
+    createdTabId = tab.id;
+    const snapshot = await new Promise<SsiSnapshot>((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        pendingSsiCapture = null;
+        reject(new Error(`SSI capture timed out after ${SSI_CAPTURE_TIMEOUT_MS / 1000}s`));
+      }, SSI_CAPTURE_TIMEOUT_MS);
+      pendingSsiCapture = { tabId: tab.id!, resolve, reject, timeoutId };
+    });
+    return snapshot;
+  } finally {
+    if (createdTabId !== undefined) {
+      try { await chrome.tabs.remove(createdTabId); } catch { /* tab may already be gone */ }
+    }
+    pendingSsiCapture = null;
+    keepAlive.stop();
+  }
+}
+
+// Daily alarm — fires every 1440 minutes.
+chrome.alarms.create(SSI_ALARM_NAME, { periodInMinutes: 1440 });
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name !== SSI_ALARM_NAME) return;
+  console.log('⏰ SSI daily alarm fired');
+  startSsiCapture()
+    .then(async (snap) => {
+      await appendSsiSnapshot(snap);
+      await clearSsiLastError();
+      console.log(`✅ SSI snapshot captured: total=${snap.total}`);
+    })
+    .catch(async (err) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn('⚠️ SSI daily capture failed:', msg);
+      await setSsiLastError({ message: msg, capturedAt: Date.now() });
+    });
 });
 
 // T124 — Engagement Queue handlers.

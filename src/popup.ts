@@ -2,8 +2,11 @@
 
 import "./popup.css";
 import { prebuiltAppConfig } from "@mlc-ai/web-llm";
+import Chart from "chart.js/auto";
 import { ProfileContextService } from "./profile-context";
-import type { ProfileContext } from "./storage-schema";
+import { renderLatest as renderSsiLatest, renderTrend as renderSsiTrend, getInsight as getSsiInsight } from "./ssi-tracker";
+import { getSsiLastError } from "./storage-schema";
+import type { ProfileContext, SsiSnapshot } from "./storage-schema";
 
 // Model configuration for different use cases
 const MODEL_PROFILES = {
@@ -173,6 +176,118 @@ function handleOpenMyProfile(): void {
   // chrome.tabs.update on the active tab to LinkedIn's "me" redirect endpoint,
   // which lands the user on their own /in/{handle}/ canonical URL.
   chrome.tabs.update({ url: 'https://www.linkedin.com/in/me/' });
+}
+
+// SSI Tracker (T223)
+const ssiNoneState = getElementAndCheck("ssiNoneState");
+const ssiCapturedState = getElementAndCheck("ssiCapturedState");
+const ssiTotal = getElementAndCheck("ssiTotal");
+const ssiIndustry = getElementAndCheck("ssiIndustry");
+const ssiNetwork = getElementAndCheck("ssiNetwork");
+const ssiCapturedAt = getElementAndCheck("ssiCapturedAt");
+const ssiCompBrand = getElementAndCheck("ssiCompBrand");
+const ssiCompFind = getElementAndCheck("ssiCompFind");
+const ssiCompEngage = getElementAndCheck("ssiCompEngage");
+const ssiCompBuild = getElementAndCheck("ssiCompBuild");
+const ssiInsight = getElementAndCheck("ssiInsight");
+const ssiErrorChip = getElementAndCheck("ssiErrorChip");
+const ssiTrendCanvas = getElementAndCheck("ssiTrendCanvas") as HTMLCanvasElement | null;
+const ssiRefreshBtn = getElementAndCheck("ssiRefresh") as HTMLButtonElement | null;
+const ssiOpenPageBtn = getElementAndCheck("ssiOpenPage") as HTMLButtonElement | null;
+const ssiMessage = getElementAndCheck("ssiMessage");
+
+let ssiChart: { destroy: () => void } | null = null;
+
+function ssiRefs() {
+  return {
+    total: ssiTotal,
+    industry: ssiIndustry,
+    network: ssiNetwork,
+    capturedAt: ssiCapturedAt,
+    components: {
+      establishBrand: ssiCompBrand,
+      findRightPeople: ssiCompFind,
+      engageWithInsights: ssiCompEngage,
+      buildRelationships: ssiCompBuild,
+    },
+  };
+}
+
+function showSsiMessage(text: string, kind: 'success' | 'error' | 'info'): void {
+  if (!ssiMessage) return;
+  ssiMessage.textContent = text;
+  ssiMessage.className = `status-message ${kind}`;
+  ssiMessage.style.display = '';
+  setTimeout(() => {
+    if (ssiMessage) ssiMessage.style.display = 'none';
+  }, 6000);
+}
+
+async function loadSsiData(): Promise<void> {
+  const [historyResp, lastError] = await Promise.all([
+    new Promise<{ snapshots: SsiSnapshot[] }>((resolve) => {
+      chrome.runtime.sendMessage({ action: 'ssi.getHistory' }, (resp) => {
+        resolve(resp ?? { snapshots: [] });
+      });
+    }),
+    getSsiLastError(),
+  ]);
+
+  const snapshots = historyResp.snapshots ?? [];
+  const latest = snapshots.length > 0 ? snapshots[snapshots.length - 1] : null;
+
+  if (!latest) {
+    if (ssiNoneState) ssiNoneState.style.display = '';
+    if (ssiCapturedState) ssiCapturedState.style.display = 'none';
+  } else {
+    if (ssiNoneState) ssiNoneState.style.display = 'none';
+    if (ssiCapturedState) ssiCapturedState.style.display = '';
+    renderSsiLatest(latest, ssiRefs());
+    if (ssiInsight) ssiInsight.textContent = getSsiInsight(snapshots);
+    if (ssiTrendCanvas) {
+      if (ssiChart) {
+        try { ssiChart.destroy(); } catch { /* ignore */ }
+      }
+      ssiChart = renderSsiTrend(snapshots, ssiTrendCanvas, Chart as never);
+    }
+  }
+
+  if (ssiErrorChip) {
+    if (lastError) {
+      ssiErrorChip.textContent = `Last capture failed: ${lastError.message}`;
+      ssiErrorChip.style.display = '';
+    } else {
+      ssiErrorChip.style.display = 'none';
+    }
+  }
+}
+
+async function handleSsiRefresh(): Promise<void> {
+  if (!ssiRefreshBtn) return;
+  ssiRefreshBtn.disabled = true;
+  const prevHtml = ssiRefreshBtn.innerHTML;
+  ssiRefreshBtn.innerHTML = '<i class="fa fa-circle-notch fa-spin"></i> Capturing…';
+  try {
+    const result = await new Promise<{ ok: boolean; error?: string }>((resolve) => {
+      chrome.runtime.sendMessage({ action: 'ssi.captureNow' }, (resp) => {
+        resolve(resp ?? { ok: false, error: 'No response from background' });
+      });
+    });
+    if (result.ok) {
+      showSsiMessage('SSI snapshot captured.', 'success');
+      await loadSsiData();
+    } else {
+      showSsiMessage(`Capture failed: ${result.error ?? 'unknown'}`, 'error');
+      await loadSsiData(); // still refresh to show error chip
+    }
+  } finally {
+    ssiRefreshBtn.disabled = false;
+    ssiRefreshBtn.innerHTML = prevHtml;
+  }
+}
+
+function handleSsiOpenPage(): void {
+  chrome.tabs.create({ url: 'https://www.linkedin.com/sales/ssi' });
 }
 
 // Model configuration
@@ -814,6 +929,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (captureProfileBtn) captureProfileBtn.addEventListener('click', handleCaptureProfile);
   if (openMyProfileBtn) openMyProfileBtn.addEventListener('click', handleOpenMyProfile);
   await refreshProfileDisplay();
+
+  // SSI Tracker wiring (T223)
+  if (ssiRefreshBtn) ssiRefreshBtn.addEventListener('click', handleSsiRefresh);
+  if (ssiOpenPageBtn) ssiOpenPageBtn.addEventListener('click', handleSsiOpenPage);
+  await loadSsiData();
 
   // Listen for progress updates from background
   chrome.runtime.onMessage.addListener((message, _sender, _sendResponse) => {

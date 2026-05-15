@@ -26,6 +26,11 @@
       "js": ["linkedin-content.ts"],
       "css": ["linkedin-styles.css"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.linkedin.com/sales/ssi*"],
+      "js": ["ssi-content.ts"],
+      "run_at": "document_idle"
     }
   ],
   "permissions": ["storage", "tabs", "activeTab", "windows", "alarms", "scripting"],

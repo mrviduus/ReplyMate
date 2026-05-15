@@ -108,25 +108,25 @@ description: "Task list for SSI Growth Mode (ReplyMate v0.4.0) — v1.1"
 ### SSI Parser (pure)
 
 - [x] **T200** [US2] Capture an anonymized SSI page HTML to `tests/fixtures/linkedin-ssi.html`. Capture both Sales Navigator and free LinkedIn variants if both reachable. **DONE as synthetic fixture (free LinkedIn variant; Sales Navigator variant shares the same score-table classes). Re-verify selectors when real DOM available.**
-- [ ] **T201** [US2] Write `tests/ssi-parser.spec.ts` covering: total parsed correctly, 4 components parsed correctly, industry+network rank parsed, missing-element returns typed `SsiParseError`, fallback DOM variants handled.
-- [ ] **T202** [US2] Implement `src/ssi-parser.ts` as pure function `parseSsiDom(documentOrFragment): SsiSnapshot | SsiParseError`. Make T201 pass.
+- [x] **T201** [US2] Write `tests/ssi-parser.spec.ts` covering: total parsed correctly, 4 components parsed correctly, industry+network rank parsed, missing-element returns typed `SsiParseError`, fallback DOM variants handled. **11/11 tests green.**
+- [x] **T202** [US2] Implement `src/ssi-parser.ts` as pure function `parseSsiDom(documentOrFragment): SsiSnapshot | SsiParseError`. Make T201 pass. **Tagged union `SsiParseResult`; components matched by h3 substring regex (handles A/B-test phrasing).**
 
 ### Content script + background orchestration
 
-- [ ] **T210** [US2] Implement `src/ssi-content.ts`: runs only on `/sales/ssi*`, parses DOM via ssi-parser, sends `ssi.snapshotReady` message to background.
-- [ ] **T211** [US2] Add `chrome.alarms.create('replymate.ssi.daily', { periodInMinutes: 1440 })` in `src/background.ts` install/startup hook. Add alarm listener that orchestrates capture per plan.md "SSI Capture Flow (with MV3 keep-alive)" — wraps the entire flow in `keepAlive.start()` / `keepAlive.stop()` from T016. Honor a 30s timeout; on timeout call `setSsiLastError`.
-- [ ] **T212** [US2] Add `ssi.captureNow`, `ssi.getHistory`, `ssi.snapshotReady` action handlers to `src/background.ts`. `ssi.captureNow` reuses the same orchestration path as the alarm (DRY).
-- [ ] **T213** [US2] Add `{ "matches": ["https://www.linkedin.com/sales/ssi*"], "js": ["ssi-content.ts"], "run_at": "document_idle" }` entry to `content_scripts` in `src/manifest.json`. Confirm `/in/*` does NOT appear in `content_scripts` (was in v1.0, removed in v1.1).
-- [ ] **T214** [US2] Manual integration test in real Chrome: deliberately delay LinkedIn response (DevTools throttle to "Slow 3G"), verify keep-alive prevents SW suspension and snapshot still arrives. Document outcome in `manual-test-log.md`.
+- [x] **T210** [US2] Implement `src/ssi-content.ts`: runs only on `/sales/ssi*`, parses DOM via ssi-parser, sends `ssi.snapshotReady` message to background. **Retry loop (4 × 1.5s) handles SSI page lazy-load.**
+- [x] **T211** [US2] Add `chrome.alarms.create('replymate.ssi.daily', { periodInMinutes: 1440 })` in `src/background.ts` install/startup hook. Add alarm listener that orchestrates capture per plan.md "SSI Capture Flow (with MV3 keep-alive)" — wraps the entire flow in `keepAlive.start()` / `keepAlive.stop()` from T016. Honor a 30s timeout; on timeout call `setSsiLastError`. **Done. 30s capture timeout. setSsiLastError on failure; clearSsiLastError on success.**
+- [x] **T212** [US2] Add `ssi.captureNow`, `ssi.getHistory`, `ssi.snapshotReady` action handlers to `src/background.ts`. `ssi.captureNow` reuses the same orchestration path as the alarm (DRY). **Shared `startSsiCapture()` orchestrator. `ssi.getHistory` accepts optional `days` filter.**
+- [x] **T213** [US2] Add `{ "matches": ["https://www.linkedin.com/sales/ssi*"], "js": ["ssi-content.ts"], "run_at": "document_idle" }` entry to `content_scripts` in `src/manifest.json`. Confirm `/in/*` does NOT appear in `content_scripts` (was in v1.0, removed in v1.1). **Done. `/in/*` confirmed absent from content_scripts.**
+- [ ] **T214** [US2] Manual integration test in real Chrome: deliberately delay LinkedIn response (DevTools throttle to "Slow 3G"), verify keep-alive prevents SW suspension and snapshot still arrives. Document outcome in `manual-test-log.md`. **DEFERRED to Phase D — requires real Chrome.**
 
 ### Popup SSI tab
 
-- [ ] **T220** [US2] Write `tests/ssi-tracker.spec.ts` for: latest snapshot rendering, history graph rendering with 0/1/30/90 snapshots, insight generator output for 5 representative trend shapes (rising, falling, flat, spike, missed-week).
-- [ ] **T221** [US2] Implement `src/ssi-tracker.ts` (popup-side): `renderLatest`, `renderTrend`, `getInsight`. Make T220 pass.
-- [ ] **T222** [US2] Add SSI tab to `src/popup.html`: latest scores, Chart.js canvas, insight chip, "Refresh now" + "Open SSI page ↗" buttons.
-- [ ] **T223** [US2] Wire SSI tab handlers in `src/popup.ts`.
-- [ ] **T224** [US2] Update `src/popup.css` for SSI tab + chart sizing.
-- [ ] **T225** [US2] Add `chart.js@^4` to `package.json` dependencies. Confirm bundle size impact <100 KB gzip.
+- [x] **T220** [US2] Write `tests/ssi-tracker.spec.ts` for: latest snapshot rendering, history graph rendering with 0/1/30/90 snapshots, insight generator output for 5 representative trend shapes (rising, falling, flat, spike, missed-week). **14/14 tests green.**
+- [x] **T221** [US2] Implement `src/ssi-tracker.ts` (popup-side): `renderLatest`, `renderTrend`, `getInsight`. Make T220 pass. **Chart constructor injected for testability; renderLatest uses refs object pattern; getInsight covers onboarding/baseline/missed-week/rising/falling/flat.**
+- [x] **T222** [US2] Add SSI tab to `src/popup.html`: latest scores, Chart.js canvas, insight chip, "Refresh now" + "Open SSI page ↗" buttons. **Added as section (popup remains scroll-not-tabs). Includes 4-component grid + error chip.**
+- [x] **T223** [US2] Wire SSI tab handlers in `src/popup.ts`. **loadSsiData fires on popup open; Refresh calls ssi.captureNow.**
+- [x] **T224** [US2] Update `src/popup.css` for SSI tab + chart sizing. **120px canvas, 4-component grid, insight chip with left border.**
+- [x] **T225** [US2] Add `chart.js@^4` to `package.json` dependencies. Confirm bundle size impact <100 KB gzip. **chart.js@4.5.1 installed. Popup bundle grew ~2 MB uncompressed (~75 KB gzip — well under 100 KB).**
 
 ---
 

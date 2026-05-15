@@ -65,6 +65,7 @@
   },
   "dependencies": {
     "@mlc-ai/web-llm": "^0.2.79",
+    "chart.js": "^4.5.1",
     "progressbar.js": "^1.1.0"
   }
 }
