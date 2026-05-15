@@ -4,6 +4,20 @@ All notable changes to ReplyMate are documented here. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows
 [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.5] — 2026-05-15 — Fix CodeQL upload permission on main-branch CI
+
+### Fixed
+
+- **`security-scan` job on main-branch push no longer fails at SARIF upload.** v0.5.3 + v0.5.4 main-branch CI runs failed at the "Perform CodeQL Analysis" → "Uploading code scanning results" step with `Resource not accessible by integration`. The scan itself completed (47 TS + 3 JS + 3 GitHub Actions files scanned, queries ran fine) — but the GITHUB_TOKEN didn't have `security-events: write` permission on `push` events, so the upload to GitHub Code Scanning failed.
+  - PR runs (`pull_request` event) worked because the default token permissions are different for that event type.
+  - Fix: explicit `permissions:` block on the `security-scan` job in `ci.yml` granting `contents: read` + `security-events: write` + `actions: read`. Same approach we already used in `release.yml` for the Create-Release step.
+
+### Why this wasn't caught earlier
+
+I checked PR-stage CI for each v0.5.x release and called it green — but didn't watch the POST-merge main-branch CI run, which has different default token permissions. The release tag still went out fine because that's a separate workflow with its own `permissions: contents: write`. Lesson: when adding workflow steps that write to GitHub (releases, code-scanning, comments, etc.), grant explicit job-level permissions even if the PR-event default works — `push` event defaults are stricter.
+
+---
+
 ## [0.5.4] — 2026-05-15 — Pre-commit hook (no more CI format follow-ups)
 
 ### Fixed
