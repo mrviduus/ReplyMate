@@ -1,6 +1,6 @@
 {
   "name": "replymate-extension",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "description": "AI-powered LinkedIn assistant for generating professional reply suggestions locally in your browser",
   "private": true,
   "scripts": {
@@ -21,7 +21,8 @@
     "format": "prettier --write \"src/**/*.{ts,js,css,html,json}\"",
     "format:check": "prettier --check \"src/**/*.{ts,js,css,html,json}\"",
     "type-check": "tsc --noEmit --project tsconfig.json",
-    "validate-manifest": "node -e \"const m=require('./dist/manifest.json'); console.log('✅ Valid:', m.name, 'v'+m.version)\""
+    "validate-manifest": "node -e \"const m=require('./dist/manifest.json'); console.log('✅ Valid:', m.name, 'v'+m.version)\"",
+    "prepare": "husky"
   },
   "keywords": [
     "chrome-extension",
@@ -53,10 +54,12 @@
     "buffer": "^6.0.3",
     "eslint": "^8.57.0",
     "eslint-plugin-jest": "^27.9.0",
+    "husky": "^9.1.7",
     "identity-obj-proxy": "^3.0.0",
     "jest": "^30.0.4",
     "jest-environment-jsdom": "^30.0.4",
     "jsdom": "^26.1.0",
+    "lint-staged": "^16.4.0",
     "parcel": "^2.9.3",
     "prettier": "^3.2.5",
     "process": "^0.11.10",
@@ -67,5 +70,13 @@
     "@mlc-ai/web-llm": "^0.2.79",
     "chart.js": "^4.5.1",
     "progressbar.js": "^1.1.0"
+  },
+  "lint-staged": {
+    "src/**/*.{ts,js,css,html,json}": [
+      "prettier --write"
+    ],
+    "*.{md,json,yml,yaml}": [
+      "prettier --write"
+    ]
   }
 }
