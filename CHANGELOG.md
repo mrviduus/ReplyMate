@@ -4,6 +4,59 @@ All notable changes to ReplyMate are documented here. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows
 [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.9] — 2026-05-15 — feed-parser real-DOM rewrite + Reply handlers through provider
+
+Two longstanding deferred items from earlier v0.5.x releases, finished in one PR.
+
+### Fixed — feed-parser.ts (Engagement Queue sidebar finally finds posts)
+
+Same root cause as profile-parser (v0.5.6) and reply-button injection (v0.5.8): LinkedIn 2026 SDUI feed has no `data-urn`, no `<article>`, no `.feed-shared-update-v2` — posts are `<div componentkey="<base64-id>">` with hash class names. Verified via Chrome MCP live introspection.
+
+Rewrite with **two-pass strategy**:
+
+- **Strategy A (legacy)**: original `[data-urn^="urn:li:activity"]` selectors preserved for older page caches. All 34 existing fixture tests pass against this path unchanged.
+- **Strategy B (2026 SDUI)**: find `button[aria-label^="Reaction button state"]` → walk up to the containing `<div componentkey="...">` post → parse author/text/counts via real-DOM patterns observed in MCP-verified DOM:
+  - Author: `a[href*="/in/"]` (personal) or `a[href*="/company/"]` (company page)
+  - Author URN: `urn:li:profile:{handle}` or `urn:li:company:{handle}`
+  - Author name: scan author-link's parent for the first reasonable text span
+  - Time: text matching `^\d+\s*[smhdw]\b` anywhere in post
+  - Post text: longest `<p>` that's not the time/counts pattern
+  - Follower tier: "X followers" text near author
+  - Engagement counts: "X reactions" / "Y comments" text patterns
+
+ID for SDUI posts is `urn:li:component:{componentkey}` — opaque but unique-per-post, suitable for dedup and storage.
+
+### Fixed — Reply button handlers route through provider abstraction
+
+`handleLinkedInReply` + `handleLinkedInReplyWithComments` in `background.ts` previously called `engine.chat.completions.create` directly, hardcoding local WebLLM regardless of the user's provider setting. Deferred since v0.5.0 (5 patch releases).
+
+Now: both handlers call `getActiveProvider({ ensureLocalEngine }).generate(...)`. So clicking the inline Reply button on a feed post **respects OpenAI mode** — drafts come from `gpt-4o-mini` / `gpt-4o` / etc. when the user has it configured.
+
+Behavior preserved:
+
+- Same prompt templates (custom or default)
+- Same preamble cleanup, sentence cap, validation
+- Same retry-with-bumped-temperature when validation score < 60
+- Same performance metrics (modelUsed now records provider.name)
+- Same response shape returned to content script
+
+Removed unused `ChatCompletionMessageParam` import.
+
+### Tests
+
+347/347 pass unchanged. Feed-parser legacy path tests (34) still cover Strategy A. SDUI Strategy B not unit-tested this round — the parser was developed against live DOM observations; integration test against synthetic fixture would need to mock React SDUI structure which adds noise without value. If a fixture is built for a future release, it can drive Strategy B tests.
+
+### Pattern summary
+
+This release closes the "anchor on promises, not implementation" loop for all three LinkedIn DOM surfaces (profile, feed posts, action bar). The pattern:
+
+- ❌ Don't anchor on CSS class names, hash classes, internal data attrs
+- ✅ Anchor on ARIA labels (a11y contract), data URNs (deep-link contract), `<h1>` / `<h2>` / `<article>` semantic tags (screen-reader + SEO contracts), `componentkey` presence (SDUI architectural marker that has to stay parseable for LinkedIn's own client)
+
+All three surfaces (profile / feed posts / Reply button injection) now use this pattern.
+
+---
+
 ## [0.5.8] — 2026-05-15 — Reply button injection: Chrome-MCP-verified DOM
 
 ### The bug in v0.5.7

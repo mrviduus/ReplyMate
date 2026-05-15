@@ -1,4 +1,4 @@
-import { MLCEngineInterface, ChatCompletionMessageParam } from '@mlc-ai/web-llm';
+import { MLCEngineInterface } from '@mlc-ai/web-llm';
 import OptimizedModelLoader from './model-loader';
 import { keepAlive } from './keep-alive';
 import { buildPositioningPrompt, buildCommentPrompt } from './prompt-builder';
@@ -1194,11 +1194,14 @@ async function handleLinkedInReplyWithComments(
   };
 
   try {
-    console.log('🟢 STEP 5A: Ensuring engine...');
+    console.log('🟢 STEP 5A: Getting active inference provider...');
     const engineStartTime = performance.now();
-    const engine = await ensureEngine();
+    // v0.5.9 — Reply button handler routed through provider abstraction so
+    // OpenAI BYOK works here too (was hardcoded to local WebLLM since v0.3.x).
+    const provider = await getActiveProvider({ ensureLocalEngine: ensureEngine });
     metrics.modelLoadTime = performance.now() - engineStartTime;
-    console.log('🟢 STEP 5B: Engine ready');
+    metrics.modelUsed = provider.name;
+    console.log(`🟢 STEP 5B: Provider ready — ${provider.name} (cloud=${provider.isCloud})`);
 
     console.log('🟢 STEP 5C: Getting user prompt for withComments...');
 
@@ -1252,31 +1255,18 @@ CRITICAL REQUIREMENTS:
 
 Write your reply directly (no preambles):`;
 
-    const messages: ChatCompletionMessageParam[] = [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
-    ];
-
-    console.log('🟢 STEP 5F: Starting AI generation...');
+    console.log('🟢 STEP 5F: Starting AI generation via provider...');
     console.log(`🎛️ Using parameters: temperature=${aiTemperature}, maxTokens=${aiMaxTokens}`);
 
     const inferenceStartTime = performance.now();
-    let reply = '';
-    const completion = await engine.chat.completions.create({
-      stream: true,
-      messages: messages,
-      max_tokens: aiMaxTokens, // User-configurable
-      temperature: aiTemperature, // User-configurable
-      top_p: 0.9,
-      stop: ['\n\n', '\n\n\n'], // Only stop on double newlines
+    const reply = await provider.generate({
+      system: systemPrompt,
+      user: userPrompt,
+      maxTokens: aiMaxTokens,
+      temperature: aiTemperature,
+      topP: 0.9,
+      stop: ['\n\n', '\n\n\n'],
     });
-
-    for await (const chunk of completion) {
-      const delta = chunk.choices[0]?.delta?.content;
-      if (delta) {
-        reply += delta;
-      }
-    }
 
     // Remove common preambles and meta-text
     const cleanReply = (text: string): string => {
@@ -1331,21 +1321,15 @@ Write your reply directly (no preambles):`;
       );
       metrics.retryAttempted = true;
 
-      // Retry with higher temperature for more creativity
-      const retryCompletion = await engine.chat.completions.create({
-        stream: true,
-        messages: messages,
-        max_tokens: aiMaxTokens,
-        temperature: Math.min(1.0, aiTemperature + 0.15), // Increase temperature
-        top_p: 0.9,
+      // Retry with higher temperature for more creativity — same provider
+      const retryReply = await provider.generate({
+        system: systemPrompt,
+        user: userPrompt,
+        maxTokens: aiMaxTokens,
+        temperature: Math.min(1.0, aiTemperature + 0.15),
+        topP: 0.9,
         stop: ['\n\n', '\n\n\n'],
       });
-
-      let retryReply = '';
-      for await (const chunk of retryCompletion) {
-        const delta = chunk.choices[0]?.delta?.content;
-        if (delta) retryReply += delta;
-      }
 
       const retryCleanedReply = cleanReply(retryReply);
       const retrySentences = retryCleanedReply.split(/[.!?]+/).filter((s) => s.trim().length > 0);
@@ -1398,11 +1382,13 @@ async function handleLinkedInReply(postContent: string, sendResponse: (response:
   };
 
   try {
-    console.log('🟢 STEP 5A: Ensuring engine...');
+    console.log('🟢 STEP 5A: Getting active inference provider...');
     const engineStartTime = performance.now();
-    const engine = await ensureEngine();
+    // v0.5.9 — Reply button handler routed through provider abstraction.
+    const provider = await getActiveProvider({ ensureLocalEngine: ensureEngine });
     metrics.modelLoadTime = performance.now() - engineStartTime;
-    console.log('🟢 STEP 5B: Engine ready');
+    metrics.modelUsed = provider.name;
+    console.log(`🟢 STEP 5B: Provider ready — ${provider.name} (cloud=${provider.isCloud})`);
 
     console.log('🟢 STEP 5C: Getting user prompt for standard...');
 
@@ -1444,31 +1430,18 @@ CRITICAL REQUIREMENTS:
 
 Write your reply directly (no preambles):`;
 
-    const messages: ChatCompletionMessageParam[] = [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
-    ];
-
-    console.log('🟢 STEP 5F: Starting AI generation...');
+    console.log('🟢 STEP 5F: Starting AI generation via provider...');
     console.log(`🎛️ Using parameters: temperature=${aiTemperature}, maxTokens=${aiMaxTokens}`);
 
     const inferenceStartTime = performance.now();
-    let reply = '';
-    const completion = await engine.chat.completions.create({
-      stream: true,
-      messages: messages,
-      max_tokens: aiMaxTokens, // User-configurable
-      temperature: aiTemperature, // User-configurable
-      top_p: 0.9,
-      stop: ['\n\n', '\n\n\n'], // Only stop on double newlines
+    const reply = await provider.generate({
+      system: systemPrompt,
+      user: userPrompt,
+      maxTokens: aiMaxTokens,
+      temperature: aiTemperature,
+      topP: 0.9,
+      stop: ['\n\n', '\n\n\n'],
     });
-
-    for await (const chunk of completion) {
-      const delta = chunk.choices[0]?.delta?.content;
-      if (delta) {
-        reply += delta;
-      }
-    }
 
     // Remove common preambles and meta-text
     const cleanReply = (text: string): string => {
@@ -1523,21 +1496,15 @@ Write your reply directly (no preambles):`;
       );
       metrics.retryAttempted = true;
 
-      // Retry with higher temperature for more creativity
-      const retryCompletion = await engine.chat.completions.create({
-        stream: true,
-        messages: messages,
-        max_tokens: aiMaxTokens,
-        temperature: Math.min(1.0, aiTemperature + 0.15), // Increase temperature
-        top_p: 0.9,
+      // Retry with higher temperature for more creativity — same provider
+      const retryReply = await provider.generate({
+        system: systemPrompt,
+        user: userPrompt,
+        maxTokens: aiMaxTokens,
+        temperature: Math.min(1.0, aiTemperature + 0.15),
+        topP: 0.9,
         stop: ['\n\n', '\n\n\n'],
       });
-
-      let retryReply = '';
-      for await (const chunk of retryCompletion) {
-        const delta = chunk.choices[0]?.delta?.content;
-        if (delta) retryReply += delta;
-      }
 
       const retryCleanedReply = cleanReply(retryReply);
       const retrySentences = retryCleanedReply.split(/[.!?]+/).filter((s) => s.trim().length > 0);
