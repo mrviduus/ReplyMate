@@ -20,8 +20,10 @@ export const LENGTH_KEYS: LengthKey[] = ['brief', 'standard', 'detailed'];
 const TONE_DESCRIPTION: Record<ToneKey, string> = {
   professional: 'professional — confident, neutral, expert. No fluff, no buzzwords.',
   friendly: 'friendly — warm and conversational, like talking to a respected colleague.',
-  enthusiastic: 'enthusiastic — high-energy and optimistic. Use exclamation marks sparingly (max 1).',
-  thoughtful: 'thoughtful — reflective and nuanced. Add a perspective the post itself did not cover.',
+  enthusiastic:
+    'enthusiastic — high-energy and optimistic. Use exclamation marks sparingly (max 1).',
+  thoughtful:
+    'thoughtful — reflective and nuanced. Add a perspective the post itself did not cover.',
 };
 
 const LENGTH_CONSTRAINT: Record<LengthKey, string> = {
@@ -55,7 +57,10 @@ export interface BuildCommentPromptInput {
   length: LengthKey;
 }
 
-export function buildCommentPrompt(input: BuildCommentPromptInput): { system: string; user: string } {
+export function buildCommentPrompt(input: BuildCommentPromptInput): {
+  system: string;
+  user: string;
+} {
   const { profile, post, tone, length } = input;
 
   const system = [
@@ -95,9 +100,10 @@ export interface BuildConnectionNotePromptInput {
   };
 }
 
-export function buildConnectionNotePrompt(
-  input: BuildConnectionNotePromptInput,
-): { system: string; user: string } {
+export function buildConnectionNotePrompt(input: BuildConnectionNotePromptInput): {
+  system: string;
+  user: string;
+} {
   const { profile, target } = input;
 
   const system = [
@@ -106,7 +112,7 @@ export function buildConnectionNotePrompt(
     '',
     'Constraints:',
     '- LinkedIn caps notes at 300 characters. Stay strictly under 300 characters.',
-    '- Reference one concrete detail from the target\'s recent activity.',
+    "- Reference one concrete detail from the target's recent activity.",
     '- Do not pitch, do not ask for anything, do not flatter.',
     '- Sound like a peer reaching out, not a recruiter or salesperson.',
     '- One short paragraph. No greeting line ("Hi <name>,"), no sign-off.',
@@ -133,9 +139,10 @@ export interface BuildPositioningPromptInput {
   recentPostThemes: string[];
 }
 
-export function buildPositioningPrompt(
-  input: BuildPositioningPromptInput,
-): { system: string; user: string } {
+export function buildPositioningPrompt(input: BuildPositioningPromptInput): {
+  system: string;
+  user: string;
+} {
   const system = [
     'You write tight positioning summaries for professionals.',
     'Output exactly 2 sentences. Maximum 40 words total.',

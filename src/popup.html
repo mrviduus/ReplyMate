@@ -4,15 +4,12 @@
     <meta charset="UTF-8" />
     <title>ReplyMate</title>
     <link rel="stylesheet" href="popup.css" />
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
-    />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   </head>
   <body>
     <div class="card">
       <header class="popup-hdr">
-        <img id="logo" src="icons/icon-32.png" width="32" height="32">
+        <img id="logo" src="icons/icon-32.png" width="32" height="32" />
         <h1 class="brand">ReplyMate</h1>
       </header>
 
@@ -27,7 +24,7 @@
             <span id="modelInfo" class="model-info"></span>
           </div>
         </div>
-        <div id="progressContainer" class="progress-container" style="display: none;">
+        <div id="progressContainer" class="progress-container" style="display: none">
           <div class="progress-bar">
             <div id="progressFill" class="progress-fill"></div>
           </div>
@@ -37,7 +34,6 @@
 
       <!-- Settings Content -->
       <div id="settings-content" class="settings-main">
-
         <!-- Profile Context Section (T037 — Phase A, US3) -->
         <div class="settings-section">
           <h3>
@@ -45,8 +41,8 @@
             Profile Context
           </h3>
           <p class="settings-description">
-            Capture your LinkedIn profile so AI drafts read in your voice. Open
-            your own profile page, then click Capture below.
+            Capture your LinkedIn profile so AI drafts read in your voice. Open your own profile page, then click
+            Capture below.
           </p>
 
           <div id="profileStatus" class="profile-status">
@@ -54,14 +50,13 @@
               <i class="fa fa-info-circle"></i>
               <span>No profile captured yet.</span>
             </div>
-            <div id="profileCapturedState" class="profile-captured" style="display: none;">
+            <div id="profileCapturedState" class="profile-captured" style="display: none">
               <div class="profile-row"><strong id="profileFullName">-</strong></div>
               <div class="profile-row profile-headline" id="profileHeadline">-</div>
               <div class="profile-row profile-positioning" id="profilePositioning">-</div>
               <div class="profile-meta">
-                Captured <span id="profileCapturedAt">-</span>
-                · <span id="profileSkillsCount">0</span> skills
-                <span id="profileStaleChip" class="profile-stale-chip" style="display: none;">stale</span>
+                Captured <span id="profileCapturedAt">-</span> · <span id="profileSkillsCount">0</span> skills
+                <span id="profileStaleChip" class="profile-stale-chip" style="display: none">stale</span>
               </div>
             </div>
           </div>
@@ -77,7 +72,7 @@
             </button>
           </div>
 
-          <div id="profileMessage" class="status-message" style="display: none;"></div>
+          <div id="profileMessage" class="status-message" style="display: none"></div>
         </div>
 
         <!-- SSI Tracker Section (T222 — Phase C, US2) -->
@@ -87,8 +82,7 @@
             SSI Tracker
           </h3>
           <p class="settings-description">
-            Daily snapshot of your LinkedIn Social Selling Index. Captured
-            locally — no data leaves your browser.
+            Daily snapshot of your LinkedIn Social Selling Index. Captured locally — no data leaves your browser.
           </p>
 
           <div id="ssiStatus">
@@ -96,14 +90,13 @@
               <i class="fa fa-info-circle"></i>
               <span>No SSI captured yet.</span>
             </div>
-            <div id="ssiCapturedState" class="ssi-captured" style="display: none;">
+            <div id="ssiCapturedState" class="ssi-captured" style="display: none">
               <div class="ssi-total-row">
                 <span class="ssi-total" id="ssiTotal">—</span>
                 <span class="ssi-total-max">/ 100</span>
               </div>
               <div class="ssi-rank-row">
-                Industry: <strong id="ssiIndustry">—</strong> ·
-                Network: <strong id="ssiNetwork">—</strong>
+                Industry: <strong id="ssiIndustry">—</strong> · Network: <strong id="ssiNetwork">—</strong>
               </div>
               <div class="ssi-components-grid">
                 <div class="ssi-component">
@@ -128,20 +121,18 @@
                 <canvas id="ssiTrendCanvas" height="120"></canvas>
               </div>
               <div id="ssiInsight" class="ssi-insight"></div>
-              <div id="ssiErrorChip" class="ssi-error-chip" style="display: none;"></div>
+              <div id="ssiErrorChip" class="ssi-error-chip" style="display: none"></div>
             </div>
           </div>
 
           <div class="ssi-actions">
-            <button id="ssiRefresh" class="btn btn-primary">
-              <i class="fa fa-sync"></i> Refresh now
-            </button>
+            <button id="ssiRefresh" class="btn btn-primary"><i class="fa fa-sync"></i> Refresh now</button>
             <button id="ssiOpenPage" class="btn btn-secondary">
               <i class="fa fa-external-link-alt"></i> Open SSI page
             </button>
           </div>
 
-          <div id="ssiMessage" class="status-message" style="display: none;"></div>
+          <div id="ssiMessage" class="status-message" style="display: none"></div>
         </div>
 
         <!-- Model Selection Section -->
@@ -156,16 +147,16 @@
             <select id="model-selection" class="select">
               <option value="">Loading models...</option>
             </select>
-            <div id="modelChangeStatus" class="model-change-status" style="display: none;">
+            <div id="modelChangeStatus" class="model-change-status" style="display: none">
               <i class="fa fa-circle-notch fa-spin"></i>
               <span>Switching model...</span>
             </div>
           </div>
 
           <!-- Model Details -->
-          <div id="modelDetails" class="model-details" style="display: none;">
+          <div id="modelDetails" class="model-details" style="display: none">
             <div class="detail-item">
-              <i class="fa fa-check-circle" style="color: #28a745;"></i>
+              <i class="fa fa-check-circle" style="color: #28a745"></i>
               <span>Active Model: <strong id="currentModelName">-</strong></span>
             </div>
             <div class="detail-item">
@@ -191,7 +182,10 @@
             <label for="temperatureSlider" class="parameter-label">
               <i class="fa fa-thermometer-half"></i>
               <span>Temperature: <strong id="temperatureValue">0.85</strong></span>
-              <span class="parameter-tooltip" title="Higher values (0.8-1.0) = more creative/varied responses. Lower values (0.5-0.7) = more focused/consistent responses.">
+              <span
+                class="parameter-tooltip"
+                title="Higher values (0.8-1.0) = more creative/varied responses. Lower values (0.5-0.7) = more focused/consistent responses."
+              >
                 <i class="fa fa-info-circle"></i>
               </span>
             </label>
@@ -215,7 +209,10 @@
             <label for="maxTokensSlider" class="parameter-label">
               <i class="fa fa-text-width"></i>
               <span>Max Tokens: <strong id="maxTokensValue">150</strong></span>
-              <span class="parameter-tooltip" title="Maximum length of generated responses. Higher values allow longer replies.">
+              <span
+                class="parameter-tooltip"
+                title="Maximum length of generated responses. Higher values allow longer replies."
+              >
                 <i class="fa fa-info-circle"></i>
               </span>
             </label>
@@ -246,7 +243,7 @@
             </button>
           </div>
 
-          <div id="parameterStatus" class="status-message" style="display: none;"></div>
+          <div id="parameterStatus" class="status-message" style="display: none"></div>
         </div>
 
         <!-- Prompts Section -->
@@ -257,7 +254,7 @@
           </h3>
           <p class="settings-description">Customize how the AI generates LinkedIn replies</p>
 
-          <div id="settingsLoading" class="settings-loading" style="display: none;">
+          <div id="settingsLoading" class="settings-loading" style="display: none">
             <div class="loading-spinner"></div>
             <p>Loading prompts...</p>
           </div>
@@ -272,7 +269,8 @@
                 id="standardPrompt"
                 class="prompt-textarea"
                 rows="6"
-                placeholder="Enter your custom prompt for standard replies...">
+                placeholder="Enter your custom prompt for standard replies..."
+              >
               </textarea>
               <small class="prompt-hint">Used for regular post replies</small>
             </div>
@@ -286,7 +284,8 @@
                 id="withCommentsPrompt"
                 class="prompt-textarea"
                 rows="6"
-                placeholder="Enter your custom prompt for smart replies...">
+                placeholder="Enter your custom prompt for smart replies..."
+              >
               </textarea>
               <small class="prompt-hint">Used when analyzing top comments for engagement</small>
             </div>
@@ -300,13 +299,13 @@
                 <i class="fa fa-undo"></i>
                 Reset to Defaults
               </button>
-              <button id="testPrompts" class="btn btn-secondary" style="margin-top: 8px; width: 100%;">
+              <button id="testPrompts" class="btn btn-secondary" style="margin-top: 8px; width: 100%">
                 <i class="fa fa-flask"></i>
                 Test Custom Prompts
               </button>
             </div>
 
-            <div id="settingsStatus" class="status-message" style="display: none;"></div>
+            <div id="settingsStatus" class="status-message" style="display: none"></div>
 
             <div class="settings-info">
               <h4>Reply Guidelines</h4>

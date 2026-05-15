@@ -1,35 +1,51 @@
-"use strict";
+'use strict';
 
-import "./popup.css";
-import { prebuiltAppConfig } from "@mlc-ai/web-llm";
+import './popup.css';
+import { prebuiltAppConfig } from '@mlc-ai/web-llm';
 // Chart.js is loaded lazily — see loadChartCtor() below. Static import would
 // pull all chart.js controllers into the popup bundle even when the user
 // never visits the SSI section.
-import { ProfileContextService } from "./profile-context";
-import { renderLatest as renderSsiLatest, renderTrend as renderSsiTrend, getInsight as getSsiInsight } from "./ssi-tracker";
-import { getSsiLastError } from "./storage-schema";
-import type { ProfileContext, SsiSnapshot } from "./storage-schema";
+import { ProfileContextService } from './profile-context';
+import {
+  renderLatest as renderSsiLatest,
+  renderTrend as renderSsiTrend,
+  getInsight as getSsiInsight,
+} from './ssi-tracker';
+import { getSsiLastError } from './storage-schema';
+import type { ProfileContext, SsiSnapshot } from './storage-schema';
 
 // Model configuration for different use cases
 const MODEL_PROFILES = {
-  'professional': {
-    models: ['Llama-3.2-3B-Instruct-q4f16_1-MLC', 'Llama-3.2-1B-Instruct-q4f16_1-MLC', 'gemma-2-2b-it-q4f16_1-MLC'],
+  professional: {
+    models: [
+      'Llama-3.2-3B-Instruct-q4f16_1-MLC',
+      'Llama-3.2-1B-Instruct-q4f16_1-MLC',
+      'gemma-2-2b-it-q4f16_1-MLC',
+    ],
     description: 'Highest quality (requires powerful device)',
     performance: 'High Quality',
-    memory: 'High (200MB+)'
+    memory: 'High (200MB+)',
   },
-  'balanced': {
-    models: ['Llama-3.2-1B-Instruct-q4f16_1-MLC', 'Phi-3.5-mini-instruct-q4f16_1-MLC', 'gemma-2-2b-it-q4f16_1-MLC'],
+  balanced: {
+    models: [
+      'Llama-3.2-1B-Instruct-q4f16_1-MLC',
+      'Phi-3.5-mini-instruct-q4f16_1-MLC',
+      'gemma-2-2b-it-q4f16_1-MLC',
+    ],
     description: 'Optimal: Great quality + browser compatible',
     performance: 'Excellent',
-    memory: 'Medium (100MB)'
+    memory: 'Medium (100MB)',
   },
-  'fast': {
-    models: ['Qwen2.5-0.5B-Instruct-q4f16_1-MLC', 'TinyLlama-1.1B-Chat-v1.0-q4f16_1-MLC', 'Qwen2-0.5B-Instruct-q4f16_1-MLC'],
+  fast: {
+    models: [
+      'Qwen2.5-0.5B-Instruct-q4f16_1-MLC',
+      'TinyLlama-1.1B-Chat-v1.0-q4f16_1-MLC',
+      'Qwen2-0.5B-Instruct-q4f16_1-MLC',
+    ],
     description: 'Fastest responses for low-end devices',
     performance: 'Fast',
-    memory: 'Low'
-  }
+    memory: 'Low',
+  },
 } as const;
 
 type ModelProfileKey = keyof typeof MODEL_PROFILES;
@@ -40,7 +56,7 @@ enum ModelStatus {
   LOADING = 'loading',
   READY = 'ready',
   ERROR = 'error',
-  NOT_INITIALIZED = 'not_initialized'
+  NOT_INITIALIZED = 'not_initialized',
 }
 
 // Loading stages for detailed progress
@@ -57,63 +73,63 @@ function getElementAndCheck(id: string): HTMLElement | null {
 }
 
 // UI Elements - Model Status Bar
-const modelStatusBar = getElementAndCheck("modelStatusBar");
-const statusIcon = getElementAndCheck("statusIcon");
-const statusLabel = getElementAndCheck("statusLabel");
-const modelInfo = getElementAndCheck("modelInfo");
-const progressContainer = getElementAndCheck("progressContainer");
-const progressFill = getElementAndCheck("progressFill");
-const progressText = getElementAndCheck("progressText");
+const modelStatusBar = getElementAndCheck('modelStatusBar');
+const statusIcon = getElementAndCheck('statusIcon');
+const statusLabel = getElementAndCheck('statusLabel');
+const modelInfo = getElementAndCheck('modelInfo');
+const progressContainer = getElementAndCheck('progressContainer');
+const progressFill = getElementAndCheck('progressFill');
+const progressText = getElementAndCheck('progressText');
 
 // UI Elements - Model Configuration
-const modelSelector = getElementAndCheck("model-selection") as HTMLSelectElement;
-const modelChangeStatus = getElementAndCheck("modelChangeStatus");
-const modelDetails = getElementAndCheck("modelDetails");
-const currentModelName = getElementAndCheck("currentModelName");
-const modelPerformance = getElementAndCheck("modelPerformance");
-const memoryUsage = getElementAndCheck("memoryUsage");
+const modelSelector = getElementAndCheck('model-selection') as HTMLSelectElement;
+const modelChangeStatus = getElementAndCheck('modelChangeStatus');
+const modelDetails = getElementAndCheck('modelDetails');
+const currentModelName = getElementAndCheck('currentModelName');
+const modelPerformance = getElementAndCheck('modelPerformance');
+const memoryUsage = getElementAndCheck('memoryUsage');
 
 // UI Elements - AI Parameters
-const temperatureSlider = getElementAndCheck("temperatureSlider") as HTMLInputElement;
-const temperatureValue = getElementAndCheck("temperatureValue");
-const maxTokensSlider = getElementAndCheck("maxTokensSlider") as HTMLInputElement;
-const maxTokensValue = getElementAndCheck("maxTokensValue");
-const saveParametersBtn = getElementAndCheck("saveParameters") as HTMLButtonElement;
-const resetParametersBtn = getElementAndCheck("resetParameters") as HTMLButtonElement;
-const parameterStatus = getElementAndCheck("parameterStatus");
+const temperatureSlider = getElementAndCheck('temperatureSlider') as HTMLInputElement;
+const temperatureValue = getElementAndCheck('temperatureValue');
+const maxTokensSlider = getElementAndCheck('maxTokensSlider') as HTMLInputElement;
+const maxTokensValue = getElementAndCheck('maxTokensValue');
+const saveParametersBtn = getElementAndCheck('saveParameters') as HTMLButtonElement;
+const resetParametersBtn = getElementAndCheck('resetParameters') as HTMLButtonElement;
+const parameterStatus = getElementAndCheck('parameterStatus');
 
 // UI Elements - Settings
-const settingsLoading = getElementAndCheck("settingsLoading");
-const settingsContent = getElementAndCheck("settingsContent");
-const standardPromptElement = getElementAndCheck("standardPrompt") as HTMLTextAreaElement;
-const withCommentsPromptElement = getElementAndCheck("withCommentsPrompt") as HTMLTextAreaElement;
-const savePromptsBtn = getElementAndCheck("savePrompts") as HTMLButtonElement;
-const resetPromptsBtn = getElementAndCheck("resetPrompts") as HTMLButtonElement;
-const testPromptsBtn = getElementAndCheck("testPrompts") as HTMLButtonElement;
-const settingsStatus = getElementAndCheck("settingsStatus");
+const settingsLoading = getElementAndCheck('settingsLoading');
+const settingsContent = getElementAndCheck('settingsContent');
+const standardPromptElement = getElementAndCheck('standardPrompt') as HTMLTextAreaElement;
+const withCommentsPromptElement = getElementAndCheck('withCommentsPrompt') as HTMLTextAreaElement;
+const savePromptsBtn = getElementAndCheck('savePrompts') as HTMLButtonElement;
+const resetPromptsBtn = getElementAndCheck('resetPrompts') as HTMLButtonElement;
+const testPromptsBtn = getElementAndCheck('testPrompts') as HTMLButtonElement;
+const settingsStatus = getElementAndCheck('settingsStatus');
 
 // Quick Actions
-const checkStatusBtn = getElementAndCheck("checkStatus") as HTMLButtonElement;
-const reinitModelBtn = getElementAndCheck("reinitModel") as HTMLButtonElement;
+const checkStatusBtn = getElementAndCheck('checkStatus') as HTMLButtonElement;
+const reinitModelBtn = getElementAndCheck('reinitModel') as HTMLButtonElement;
 
 // Profile Context (T037)
-const captureProfileBtn = getElementAndCheck("captureProfile") as HTMLButtonElement | null;
-const openMyProfileBtn = getElementAndCheck("openMyProfile") as HTMLButtonElement | null;
-const profileNoneState = getElementAndCheck("profileNoneState");
-const profileCapturedState = getElementAndCheck("profileCapturedState");
-const profileFullName = getElementAndCheck("profileFullName");
-const profileHeadline = getElementAndCheck("profileHeadline");
-const profilePositioning = getElementAndCheck("profilePositioning");
-const profileCapturedAt = getElementAndCheck("profileCapturedAt");
-const profileSkillsCount = getElementAndCheck("profileSkillsCount");
-const profileStaleChip = getElementAndCheck("profileStaleChip");
-const profileMessage = getElementAndCheck("profileMessage");
+const captureProfileBtn = getElementAndCheck('captureProfile') as HTMLButtonElement | null;
+const openMyProfileBtn = getElementAndCheck('openMyProfile') as HTMLButtonElement | null;
+const profileNoneState = getElementAndCheck('profileNoneState');
+const profileCapturedState = getElementAndCheck('profileCapturedState');
+const profileFullName = getElementAndCheck('profileFullName');
+const profileHeadline = getElementAndCheck('profileHeadline');
+const profilePositioning = getElementAndCheck('profilePositioning');
+const profileCapturedAt = getElementAndCheck('profileCapturedAt');
+const profileSkillsCount = getElementAndCheck('profileSkillsCount');
+const profileStaleChip = getElementAndCheck('profileStaleChip');
+const profileMessage = getElementAndCheck('profileMessage');
 const profileService = new ProfileContextService();
 
 function formatRelativeTime(timestamp: number): string {
   const diffMs = Date.now() - timestamp;
   const minutes = Math.round(diffMs / 60000);
-  if (minutes < 1) return "just now";
+  if (minutes < 1) return 'just now';
   if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.round(minutes / 60);
   if (hours < 24) return `${hours}h ago`;
@@ -131,7 +147,8 @@ function renderProfile(profile: ProfileContext | null, isStale: boolean): void {
   if (profileCapturedState) profileCapturedState.style.display = '';
   if (profileFullName) profileFullName.textContent = profile.fullName || '(no name)';
   if (profileHeadline) profileHeadline.textContent = profile.headline || '(no headline)';
-  if (profilePositioning) profilePositioning.textContent = profile.positioningSummary || '(no positioning summary)';
+  if (profilePositioning)
+    profilePositioning.textContent = profile.positioningSummary || '(no positioning summary)';
   if (profileCapturedAt) profileCapturedAt.textContent = formatRelativeTime(profile.capturedAt);
   if (profileSkillsCount) profileSkillsCount.textContent = String(profile.topSkills.length);
   if (profileStaleChip) profileStaleChip.style.display = isStale ? '' : 'none';
@@ -181,22 +198,22 @@ function handleOpenMyProfile(): void {
 }
 
 // SSI Tracker (T223)
-const ssiNoneState = getElementAndCheck("ssiNoneState");
-const ssiCapturedState = getElementAndCheck("ssiCapturedState");
-const ssiTotal = getElementAndCheck("ssiTotal");
-const ssiIndustry = getElementAndCheck("ssiIndustry");
-const ssiNetwork = getElementAndCheck("ssiNetwork");
-const ssiCapturedAt = getElementAndCheck("ssiCapturedAt");
-const ssiCompBrand = getElementAndCheck("ssiCompBrand");
-const ssiCompFind = getElementAndCheck("ssiCompFind");
-const ssiCompEngage = getElementAndCheck("ssiCompEngage");
-const ssiCompBuild = getElementAndCheck("ssiCompBuild");
-const ssiInsight = getElementAndCheck("ssiInsight");
-const ssiErrorChip = getElementAndCheck("ssiErrorChip");
-const ssiTrendCanvas = getElementAndCheck("ssiTrendCanvas") as HTMLCanvasElement | null;
-const ssiRefreshBtn = getElementAndCheck("ssiRefresh") as HTMLButtonElement | null;
-const ssiOpenPageBtn = getElementAndCheck("ssiOpenPage") as HTMLButtonElement | null;
-const ssiMessage = getElementAndCheck("ssiMessage");
+const ssiNoneState = getElementAndCheck('ssiNoneState');
+const ssiCapturedState = getElementAndCheck('ssiCapturedState');
+const ssiTotal = getElementAndCheck('ssiTotal');
+const ssiIndustry = getElementAndCheck('ssiIndustry');
+const ssiNetwork = getElementAndCheck('ssiNetwork');
+const ssiCapturedAt = getElementAndCheck('ssiCapturedAt');
+const ssiCompBrand = getElementAndCheck('ssiCompBrand');
+const ssiCompFind = getElementAndCheck('ssiCompFind');
+const ssiCompEngage = getElementAndCheck('ssiCompEngage');
+const ssiCompBuild = getElementAndCheck('ssiCompBuild');
+const ssiInsight = getElementAndCheck('ssiInsight');
+const ssiErrorChip = getElementAndCheck('ssiErrorChip');
+const ssiTrendCanvas = getElementAndCheck('ssiTrendCanvas') as HTMLCanvasElement | null;
+const ssiRefreshBtn = getElementAndCheck('ssiRefresh') as HTMLButtonElement | null;
+const ssiOpenPageBtn = getElementAndCheck('ssiOpenPage') as HTMLButtonElement | null;
+const ssiMessage = getElementAndCheck('ssiMessage');
 
 let ssiChart: { destroy: () => void } | null = null;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- chart.js/auto default export
@@ -204,7 +221,7 @@ let cachedChartCtor: any = null;
 
 async function loadChartCtor(): Promise<unknown> {
   if (!cachedChartCtor) {
-    const mod = await import("chart.js/auto");
+    const mod = await import('chart.js/auto');
     cachedChartCtor = mod.default;
   }
   return cachedChartCtor;
@@ -258,7 +275,11 @@ async function loadSsiData(): Promise<void> {
     if (ssiInsight) ssiInsight.textContent = getSsiInsight(snapshots);
     if (ssiTrendCanvas) {
       if (ssiChart) {
-        try { ssiChart.destroy(); } catch { /* ignore */ }
+        try {
+          ssiChart.destroy();
+        } catch {
+          /* ignore */
+        }
       }
       const ChartCtor = await loadChartCtor();
       ssiChart = renderSsiTrend(snapshots, ssiTrendCanvas, ChartCtor as never);
@@ -304,13 +325,13 @@ function handleSsiOpenPage(): void {
 }
 
 // Model configuration
-let selectedModel = "";
-let actualActiveModel = ""; // The model actually running in background
+let selectedModel = '';
+let actualActiveModel = ''; // The model actually running in background
 
 // Default prompts
 let defaultPrompts = {
   standard: '',
-  withComments: ''
+  withComments: '',
 };
 
 // Default AI parameters - Optimized for better quality
@@ -403,15 +424,15 @@ function showModelDetails(modelId: string, isActuallyActive: boolean = false) {
 // Smart model selection - BALANCED for reliable LinkedIn performance
 function getOptimalModel(): string {
   try {
-    const availableModelIds = prebuiltAppConfig.model_list.map(m => m.model_id);
+    const availableModelIds = prebuiltAppConfig.model_list.map((m) => m.model_id);
 
     // Prioritize balanced models: Quality with stable performance
     const optimalModels = [
-      "Llama-3.2-1B-Instruct-q4f16_1-MLC",  // OPTIMAL: Best balance of quality and performance
-      "gemma-2-2b-it-q4f16_1-MLC",          // Good alternative
-      "Phi-3.5-mini-instruct-q4f16_1-MLC",  // Lightweight option
-      "Llama-3.2-3B-Instruct-q4f16_1-MLC",  // Heavy model (may have issues)
-      "Qwen2.5-0.5B-Instruct-q4f16_1-MLC"   // Ultra-light fallback
+      'Llama-3.2-1B-Instruct-q4f16_1-MLC', // OPTIMAL: Best balance of quality and performance
+      'gemma-2-2b-it-q4f16_1-MLC', // Good alternative
+      'Phi-3.5-mini-instruct-q4f16_1-MLC', // Lightweight option
+      'Llama-3.2-3B-Instruct-q4f16_1-MLC', // Heavy model (may have issues)
+      'Qwen2.5-0.5B-Instruct-q4f16_1-MLC', // Ultra-light fallback
     ];
 
     // Return the first available balanced model
@@ -423,10 +444,10 @@ function getOptimalModel(): string {
     }
 
     // Ultimate fallback
-    return availableModelIds[0] || "Llama-3.2-1B-Instruct-q4f16_1-MLC";
+    return availableModelIds[0] || 'Llama-3.2-1B-Instruct-q4f16_1-MLC';
   } catch (error) {
     console.error('Error selecting optimal model:', error);
-    return "Llama-3.2-1B-Instruct-q4f16_1-MLC"; // Default to balanced
+    return 'Llama-3.2-1B-Instruct-q4f16_1-MLC'; // Default to balanced
   }
 }
 
@@ -447,7 +468,7 @@ function getModelDisplayName(modelId: string): string {
 async function setupModelSelector() {
   if (!modelSelector) return;
 
-  updateModelStatus(ModelStatus.CHECKING, "Loading model list...");
+  updateModelStatus(ModelStatus.CHECKING, 'Loading model list...');
 
   modelSelector.innerHTML = '';
 
@@ -461,14 +482,14 @@ async function setupModelSelector() {
   }
 
   const appConfig = prebuiltAppConfig;
-  const availableModels = new Set(appConfig.model_list.map(m => m.model_id));
+  const availableModels = new Set(appConfig.model_list.map((m) => m.model_id));
   const addedModels = new Set<string>();
 
   Object.entries(MODEL_PROFILES).forEach(([profileName, profile]) => {
     const optgroup = document.createElement('optgroup');
     optgroup.label = `${profileName.charAt(0).toUpperCase() + profileName.slice(1)} - ${profile.description}`;
 
-    profile.models.forEach(modelId => {
+    profile.models.forEach((modelId) => {
       if (availableModels.has(modelId) && !addedModels.has(modelId)) {
         const option = document.createElement('option');
         option.value = modelId;
@@ -504,28 +525,39 @@ async function handleSelectChange() {
   modelChangeStatus.style.display = 'flex';
   modelSelector.disabled = true;
 
-  updateModelStatus(ModelStatus.LOADING, "Switching model...", `Loading ${getModelDisplayName(selectedModel)}`);
-  updateProgress(0, "Initializing...");
+  updateModelStatus(
+    ModelStatus.LOADING,
+    'Switching model...',
+    `Loading ${getModelDisplayName(selectedModel)}`
+  );
+  updateProgress(0, 'Initializing...');
 
   // Notify background to load the new model
-  chrome.runtime.sendMessage({
-    action: 'updateModel',
-    model: selectedModel
-  }, (response) => {
-    modelChangeStatus.style.display = 'none';
-    modelSelector.disabled = false;
-    updateProgress(0);
+  chrome.runtime.sendMessage(
+    {
+      action: 'updateModel',
+      model: selectedModel,
+    },
+    (response) => {
+      modelChangeStatus.style.display = 'none';
+      modelSelector.disabled = false;
+      updateProgress(0);
 
-    if (response?.success) {
-      actualActiveModel = selectedModel;
-      showModelDetails(selectedModel, true);
-      updateModelStatus(ModelStatus.READY, "✅ Model switched successfully", `Active: ${getModelDisplayName(selectedModel)}`);
-    } else {
-      // Revert selection on failure
-      modelSelector.value = actualActiveModel || selectedModel;
-      updateModelStatus(ModelStatus.ERROR, "Failed to switch model", "Please try again");
+      if (response?.success) {
+        actualActiveModel = selectedModel;
+        showModelDetails(selectedModel, true);
+        updateModelStatus(
+          ModelStatus.READY,
+          '✅ Model switched successfully',
+          `Active: ${getModelDisplayName(selectedModel)}`
+        );
+      } else {
+        // Revert selection on failure
+        modelSelector.value = actualActiveModel || selectedModel;
+        updateModelStatus(ModelStatus.ERROR, 'Failed to switch model', 'Please try again');
+      }
     }
-  });
+  );
 }
 
 // Check what model is actually active in background
@@ -549,12 +581,12 @@ async function checkActualActiveModel(): Promise<void> {
 
 // Check model status
 async function checkModelStatus() {
-  updateModelStatus(ModelStatus.CHECKING, "Checking model status...");
-  updateProgress(5, "Connecting...");
+  updateModelStatus(ModelStatus.CHECKING, 'Checking model status...');
+  updateProgress(5, 'Connecting...');
 
   chrome.runtime.sendMessage({ action: 'checkEngineStatus' }, (response) => {
     if (chrome.runtime.lastError) {
-      updateModelStatus(ModelStatus.ERROR, "Extension error", chrome.runtime.lastError.message);
+      updateModelStatus(ModelStatus.ERROR, 'Extension error', chrome.runtime.lastError.message);
       updateProgress(0);
       return;
     }
@@ -571,23 +603,34 @@ async function checkModelStatus() {
       }
 
       const modelName = getModelDisplayName(activeModel);
-      updateModelStatus(ModelStatus.READY, "✅ AI Model Ready", `Active: ${modelName} • ${response.cacheMessage || ''}`);
+      updateModelStatus(
+        ModelStatus.READY,
+        '✅ AI Model Ready',
+        `Active: ${modelName} • ${response.cacheMessage || ''}`
+      );
       showModelDetails(activeModel, true);
-      updateProgress(100, "100%");
+      updateProgress(100, '100%');
       setTimeout(() => updateProgress(0), 1500);
     } else if (response?.initializing) {
       const cacheMsg = response?.cached
-        ? "Loading from cache (fast)"
-        : "First-time download (1-3 minutes)";
-      updateModelStatus(ModelStatus.LOADING, "Model initializing...", cacheMsg);
-      updateProgress(15, "Starting...");
+        ? 'Loading from cache (fast)'
+        : 'First-time download (1-3 minutes)';
+      updateModelStatus(ModelStatus.LOADING, 'Model initializing...', cacheMsg);
+      updateProgress(15, 'Starting...');
 
       // If not cached, show warning
       if (!response?.cached) {
-        showStatus('⏱️ First-time setup: Downloading AI model (50-200MB). This only happens once!', 'info');
+        showStatus(
+          '⏱️ First-time setup: Downloading AI model (50-200MB). This only happens once!',
+          'info'
+        );
       }
     } else {
-      updateModelStatus(ModelStatus.NOT_INITIALIZED, "Model not initialized", "Click 'Reinitialize Model' to start");
+      updateModelStatus(
+        ModelStatus.NOT_INITIALIZED,
+        'Model not initialized',
+        "Click 'Reinitialize Model' to start"
+      );
       updateProgress(0);
     }
   });
@@ -598,24 +641,35 @@ async function reinitializeModel() {
   if (!reinitModelBtn) return;
 
   reinitModelBtn.disabled = true;
-  updateModelStatus(ModelStatus.LOADING, "Starting model initialization...", "Checking cache status...");
-  updateProgress(0, "Preparing...");
+  updateModelStatus(
+    ModelStatus.LOADING,
+    'Starting model initialization...',
+    'Checking cache status...'
+  );
+  updateProgress(0, 'Preparing...');
 
   // Request model initialization
-  chrome.runtime.sendMessage({
-    action: 'initializeModel'
-  }, (response) => {
-    reinitModelBtn.disabled = false;
+  chrome.runtime.sendMessage(
+    {
+      action: 'initializeModel',
+    },
+    (response) => {
+      reinitModelBtn.disabled = false;
 
-    if (response?.success) {
-      updateProgress(100, "Complete!");
-      // Re-check actual status after initialization
-      setTimeout(() => checkModelStatus(), 500);
-    } else {
-      updateProgress(0);
-      updateModelStatus(ModelStatus.ERROR, "Initialization failed", response?.error || "Please try again");
+      if (response?.success) {
+        updateProgress(100, 'Complete!');
+        // Re-check actual status after initialization
+        setTimeout(() => checkModelStatus(), 500);
+      } else {
+        updateProgress(0);
+        updateModelStatus(
+          ModelStatus.ERROR,
+          'Initialization failed',
+          response?.error || 'Please try again'
+        );
+      }
     }
-  });
+  );
 }
 
 // Load AI parameters from storage
@@ -654,24 +708,27 @@ async function saveParameters() {
   try {
     await chrome.storage.sync.set({
       aiTemperature: temperature,
-      aiMaxTokens: maxTokens
+      aiMaxTokens: maxTokens,
     });
 
     // Notify background script to update parameters
-    chrome.runtime.sendMessage({
-      action: 'updateAIParameters',
-      temperature: temperature,
-      maxTokens: maxTokens
-    }, (response) => {
-      if (saveParametersBtn) saveParametersBtn.disabled = false;
-      if (resetParametersBtn) resetParametersBtn.disabled = false;
+    chrome.runtime.sendMessage(
+      {
+        action: 'updateAIParameters',
+        temperature: temperature,
+        maxTokens: maxTokens,
+      },
+      (response) => {
+        if (saveParametersBtn) saveParametersBtn.disabled = false;
+        if (resetParametersBtn) resetParametersBtn.disabled = false;
 
-      if (response?.success) {
-        showParameterStatus('✅ Parameters saved successfully!', 'success');
-      } else {
-        showParameterStatus('Failed to save parameters', 'error');
+        if (response?.success) {
+          showParameterStatus('✅ Parameters saved successfully!', 'success');
+        } else {
+          showParameterStatus('Failed to save parameters', 'error');
+        }
       }
-    });
+    );
   } catch (error) {
     console.error('Failed to save parameters:', error);
     if (saveParametersBtn) saveParametersBtn.disabled = false;
@@ -689,7 +746,7 @@ async function resetParameters() {
   try {
     await chrome.storage.sync.set({
       aiTemperature: DEFAULT_TEMPERATURE,
-      aiMaxTokens: DEFAULT_MAX_TOKENS
+      aiMaxTokens: DEFAULT_MAX_TOKENS,
     });
 
     if (temperatureSlider && temperatureValue) {
@@ -706,7 +763,7 @@ async function resetParameters() {
     chrome.runtime.sendMessage({
       action: 'updateAIParameters',
       temperature: DEFAULT_TEMPERATURE,
-      maxTokens: DEFAULT_MAX_TOKENS
+      maxTokens: DEFAULT_MAX_TOKENS,
     });
 
     showParameterStatus('✅ Parameters reset to defaults', 'success');
@@ -748,7 +805,8 @@ async function loadSettings() {
           standardPromptElement.value = customPrompts.standard || defaultPrompts.standard;
         }
         if (withCommentsPromptElement) {
-          withCommentsPromptElement.value = customPrompts.withComments || defaultPrompts.withComments;
+          withCommentsPromptElement.value =
+            customPrompts.withComments || defaultPrompts.withComments;
         }
       }
 
@@ -779,22 +837,25 @@ async function savePrompts() {
   resetPromptsBtn.disabled = true;
   showStatus('Saving prompts...', 'info');
 
-  chrome.runtime.sendMessage({
-    action: 'savePrompts',
-    prompts: {
-      standard: standardPrompt,
-      withComments: withCommentsPrompt
-    }
-  }, (response) => {
-    savePromptsBtn.disabled = false;
-    resetPromptsBtn.disabled = false;
+  chrome.runtime.sendMessage(
+    {
+      action: 'savePrompts',
+      prompts: {
+        standard: standardPrompt,
+        withComments: withCommentsPrompt,
+      },
+    },
+    (response) => {
+      savePromptsBtn.disabled = false;
+      resetPromptsBtn.disabled = false;
 
-    if (response?.success) {
-      showStatus('✅ Settings saved successfully!', 'success');
-    } else {
-      showStatus('Failed to save settings', 'error');
+      if (response?.success) {
+        showStatus('✅ Settings saved successfully!', 'success');
+      } else {
+        showStatus('Failed to save settings', 'error');
+      }
     }
-  });
+  );
 }
 
 // Reset prompts to defaults
@@ -828,31 +889,35 @@ async function testPrompts() {
   const standardPrompt = standardPromptElement?.value.trim() || '';
   const withCommentsPrompt = withCommentsPromptElement?.value.trim() || '';
 
-  chrome.runtime.sendMessage({
-    action: 'savePrompts',
-    prompts: {
-      standard: standardPrompt,
-      withComments: withCommentsPrompt
-    }
-  }, (saveResponse) => {
-    if (saveResponse?.success) {
-      chrome.runtime.sendMessage({ action: 'verifyPrompts' }, (response) => {
-        testPromptsBtn.disabled = false;
+  chrome.runtime.sendMessage(
+    {
+      action: 'savePrompts',
+      prompts: {
+        standard: standardPrompt,
+        withComments: withCommentsPrompt,
+      },
+    },
+    (saveResponse) => {
+      if (saveResponse?.success) {
+        chrome.runtime.sendMessage({ action: 'verifyPrompts' }, (response) => {
+          testPromptsBtn.disabled = false;
 
-        if (response?.hasCustomPrompts) {
-          const statusMsg = `✅ Custom prompts active<br>` +
-                          `Standard: ${response.isUsingCustomStandard ? 'Custom' : 'Default'}<br>` +
-                          `Smart: ${response.isUsingCustomComments ? 'Custom' : 'Default'}`;
-          showStatus(statusMsg, 'success');
-        } else {
-          showStatus('Using default prompts', 'info');
-        }
-      });
-    } else {
-      testPromptsBtn.disabled = false;
-      showStatus('Failed to save prompts for testing', 'error');
+          if (response?.hasCustomPrompts) {
+            const statusMsg =
+              `✅ Custom prompts active<br>` +
+              `Standard: ${response.isUsingCustomStandard ? 'Custom' : 'Default'}<br>` +
+              `Smart: ${response.isUsingCustomComments ? 'Custom' : 'Default'}`;
+            showStatus(statusMsg, 'success');
+          } else {
+            showStatus('Using default prompts', 'info');
+          }
+        });
+      } else {
+        testPromptsBtn.disabled = false;
+        showStatus('Failed to save prompts for testing', 'error');
+      }
     }
-  });
+  );
 }
 
 // Show status message
@@ -874,11 +939,11 @@ function showStatus(message: string, type: 'success' | 'error' | 'info') {
 }
 
 // Initialize popup on DOM ready
-document.addEventListener("DOMContentLoaded", async () => {
+document.addEventListener('DOMContentLoaded', async () => {
   console.log('🚀 ReplyMate popup opened - Enhanced UI');
 
   // Initial status
-  updateModelStatus(ModelStatus.CHECKING, "Initializing ReplyMate...");
+  updateModelStatus(ModelStatus.CHECKING, 'Initializing ReplyMate...');
 
   // Setup model selector first
   await setupModelSelector();
@@ -915,7 +980,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Setup event handlers
   if (modelSelector) {
-    modelSelector.addEventListener("change", handleSelectChange);
+    modelSelector.addEventListener('change', handleSelectChange);
   }
 
   if (savePromptsBtn) {
@@ -974,16 +1039,22 @@ function handleProgressUpdate(update: LoadingProgress) {
   // Update status based on stage
   if (stage === 'complete') {
     updateModelStatus(ModelStatus.READY, message, `Model cached for fast loading`);
-    updateProgress(100, "100%");
+    updateProgress(100, '100%');
     setTimeout(() => updateProgress(0), 2000);
   } else {
-    updateModelStatus(ModelStatus.LOADING, message,
-      isFirstLoad ? "⏱️ One-time download • Future loads will be instant" : "⚡ Loading from cache");
+    updateModelStatus(
+      ModelStatus.LOADING,
+      message,
+      isFirstLoad ? '⏱️ One-time download • Future loads will be instant' : '⚡ Loading from cache'
+    );
     updateProgress(progress, `${progress}%`);
   }
 
   // Show additional info for first load
   if (isFirstLoad && progress === 0) {
-    showStatus('📥 First-time setup: The AI model needs to be downloaded once. After this, it will load instantly from cache!', 'info');
+    showStatus(
+      '📥 First-time setup: The AI model needs to be downloaded once. After this, it will load instantly from cache!',
+      'info'
+    );
   }
 }

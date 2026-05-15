@@ -88,12 +88,12 @@ type ChartCtor = new (canvas: HTMLCanvasElement, config: ChartConfig) => ChartLi
 export function renderTrend(
   snapshots: SsiSnapshot[],
   canvas: HTMLCanvasElement,
-  Chart: ChartCtor,
+  Chart: ChartCtor
 ): ChartLike | null {
   if (snapshots.length === 0) return null;
 
   const labels = snapshots.map((s) =>
-    new Date(s.capturedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+    new Date(s.capturedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
   );
   const totalData = snapshots.map((s) => s.total);
 

@@ -37,12 +37,63 @@ import type {
 // ─── Token utils ────────────────────────────────────────────────────────────
 
 const STOP_WORDS = new Set([
-  'the', 'and', 'for', 'with', 'this', 'that', 'from', 'into', 'over', 'about',
-  'have', 'has', 'had', 'are', 'was', 'were', 'will', 'would', 'could', 'should',
-  'our', 'you', 'your', 'their', 'they', 'them', 'his', 'her', 'its', 'who', 'what',
-  'when', 'where', 'how', 'why', 'all', 'any', 'just', 'than', 'then', 'there',
-  'here', 'now', 'one', 'two', 'too', 'but', 'not', 'also', 'more', 'most',
-  'some', 'such', 'only', 'own', 'same', 'each',
+  'the',
+  'and',
+  'for',
+  'with',
+  'this',
+  'that',
+  'from',
+  'into',
+  'over',
+  'about',
+  'have',
+  'has',
+  'had',
+  'are',
+  'was',
+  'were',
+  'will',
+  'would',
+  'could',
+  'should',
+  'our',
+  'you',
+  'your',
+  'their',
+  'they',
+  'them',
+  'his',
+  'her',
+  'its',
+  'who',
+  'what',
+  'when',
+  'where',
+  'how',
+  'why',
+  'all',
+  'any',
+  'just',
+  'than',
+  'then',
+  'there',
+  'here',
+  'now',
+  'one',
+  'two',
+  'too',
+  'but',
+  'not',
+  'also',
+  'more',
+  'most',
+  'some',
+  'such',
+  'only',
+  'own',
+  'same',
+  'each',
 ]);
 
 /** Lowercase, drop punctuation, drop stop-words, drop tokens shorter than 3. */
@@ -68,21 +119,31 @@ export function jaccard(a: string[], b: string[]): number {
 
 export function authorTierScore(tier: FollowerTier): number {
   switch (tier) {
-    case 'lt_1k': return 0.2;
-    case '1k_10k': return 0.5;
-    case '10k_100k': return 0.8;
-    case 'gt_100k': return 1.0;
-    case 'unknown': return 0.4;
+    case 'lt_1k':
+      return 0.2;
+    case '1k_10k':
+      return 0.5;
+    case '10k_100k':
+      return 0.8;
+    case 'gt_100k':
+      return 1.0;
+    case 'unknown':
+      return 0.4;
   }
 }
 
 export function relationshipScore(degree: ConnectionDegree): number {
   switch (degree) {
-    case '1st': return 1.0;
-    case '2nd': return 0.6;
-    case '3rd': return 0.3;
-    case 'follow-only': return 0.4;
-    case 'unknown': return 0.4;
+    case '1st':
+      return 1.0;
+    case '2nd':
+      return 0.6;
+    case '3rd':
+      return 0.3;
+    case 'follow-only':
+      return 0.4;
+    case 'unknown':
+      return 0.4;
   }
 }
 
@@ -118,9 +179,17 @@ export function diversityBonus(authorUrn: string, recentlyDisplayedAuthors: stri
 // ─── AI-content heuristic ───────────────────────────────────────────────────
 
 const AI_BUZZWORDS = [
-  'leverage', 'synergies', 'synergy', 'transformative', 'game-changer',
-  'game changer', 'unlock potential', 'paradigm shift', 'cutting-edge',
-  'best-in-class', 'next-level',
+  'leverage',
+  'synergies',
+  'synergy',
+  'transformative',
+  'game-changer',
+  'game changer',
+  'unlock potential',
+  'paradigm shift',
+  'cutting-edge',
+  'best-in-class',
+  'next-level',
 ];
 
 /**
@@ -164,11 +233,11 @@ export interface ScoringInput {
 }
 
 const WEIGHTS = {
-  topicMatch: 0.40,
-  authorTier: 0.20,
+  topicMatch: 0.4,
+  authorTier: 0.2,
   relationship: 0.15,
-  recency: 0.10,
-  engagement: 0.10,
+  recency: 0.1,
+  engagement: 0.1,
   diversity: 0.05,
 } as const;
 

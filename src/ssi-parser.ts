@@ -67,7 +67,7 @@ function err(reason: SsiParseReason, message: string): SsiParseError {
 
 export function parseSsiDom(
   doc: Document | DocumentFragment,
-  options: ParseOptions = {},
+  options: ParseOptions = {}
 ): SsiParseResult {
   const now = options.now ?? Date.now();
 
@@ -105,7 +105,7 @@ export function parseSsiDom(
   if (missing.length > 0) {
     return err(
       'missing-component',
-      `Missing component cards: ${missing.join(', ')} (got ${cards.length} cards)`,
+      `Missing component cards: ${missing.join(', ')} (got ${cards.length} cards)`
     );
   }
 
@@ -114,7 +114,7 @@ export function parseSsiDom(
   if (rankEls.length < 2) {
     return err(
       'missing-rank',
-      `Expected 2 .ssi-ranking-statement elements; found ${rankEls.length}`,
+      `Expected 2 .ssi-ranking-statement elements; found ${rankEls.length}`
     );
   }
   const industryRank = readText(rankEls[0]);

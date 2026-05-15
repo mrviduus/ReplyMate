@@ -1,4 +1,4 @@
-import { MLCEngineInterface, ChatCompletionMessageParam } from "@mlc-ai/web-llm";
+import { MLCEngineInterface, ChatCompletionMessageParam } from '@mlc-ai/web-llm';
 import OptimizedModelLoader from './model-loader';
 import { keepAlive } from './keep-alive';
 import { buildPositioningPrompt, buildCommentPrompt } from './prompt-builder';
@@ -30,9 +30,9 @@ function getOptimalBackgroundModel(): string {
 
   // Model tiers based on device capability
   const modelTiers = {
-    high: "Llama-3.2-3B-Instruct-q4f16_1-MLC",     // 3B: Highest quality (requires 8GB+ RAM)
-    medium: "Llama-3.2-1B-Instruct-q4f16_1-MLC",   // 1B: Balanced (4-8GB RAM)
-    low: "Qwen2.5-0.5B-Instruct-q4f16_1-MLC"       // 0.5B: Fast fallback (<4GB RAM)
+    high: 'Llama-3.2-3B-Instruct-q4f16_1-MLC', // 3B: Highest quality (requires 8GB+ RAM)
+    medium: 'Llama-3.2-1B-Instruct-q4f16_1-MLC', // 1B: Balanced (4-8GB RAM)
+    low: 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC', // 0.5B: Fast fallback (<4GB RAM)
   };
 
   // Device-based selection
@@ -112,7 +112,7 @@ function logPerformanceMetrics(metrics: GenerationMetrics): void {
     const allMetrics = result.performanceMetrics || [];
     allMetrics.push({
       timestamp: Date.now(),
-      ...metrics
+      ...metrics,
     });
 
     // Keep only last 100 metrics
@@ -157,7 +157,7 @@ function validateReplyQuality(reply: string): ValidationResult {
     /^this\s+is\s/i,
     /^i['']?ve\s+rewritten/i,
     /^response:/i,
-    /^reply:/i
+    /^reply:/i,
   ];
 
   for (const pattern of preamblePatterns) {
@@ -170,7 +170,7 @@ function validateReplyQuality(reply: string): ValidationResult {
   const genericPatterns = [
     /^(great|nice|good|excellent)\s+(post|share|article)[!.]/i,
     /^thanks?\s+for\s+sharing[!.]/i,
-    /^(totally|completely)\s+agree[!.]/i
+    /^(totally|completely)\s+agree[!.]/i,
   ];
 
   for (const pattern of genericPatterns) {
@@ -270,20 +270,20 @@ AVOID:
 - Generic praise ("Great post!", "Thanks for sharing!")
 - Multiple sentences or explanations
 - Obvious statements everyone would agree with
-- Self-promotional content`
+- Self-promotional content`,
 };
 
 // Get user's custom prompt or use default
 async function getUserPrompt(type: 'withComments' | 'standard'): Promise<string> {
   console.log(`🔍 getUserPrompt called for type: ${type}`);
-  
+
   try {
     // Always check storage first
     const result = await chrome.storage.sync.get(['customPrompts']);
     console.log('📦 Storage result:', result);
-    
+
     const customPrompts = result.customPrompts || {};
-    
+
     // Check if custom prompt exists and is not empty
     if (customPrompts[type] && customPrompts[type].trim().length > 0) {
       console.log(`✅ Using CUSTOM prompt for ${type}`);
@@ -330,8 +330,9 @@ async function ensureEngine(): Promise<MLCEngineInterface> {
     console.log('🔄 Engine already initializing, waiting...');
     // Wait for initialization to complete with timeout
     let attempts = 0;
-    while (engineInitializing && attempts < 60) { // 30 seconds max
-      await new Promise(resolve => setTimeout(resolve, 500));
+    while (engineInitializing && attempts < 60) {
+      // 30 seconds max
+      await new Promise((resolve) => setTimeout(resolve, 500));
       attempts++;
     }
 
@@ -356,7 +357,7 @@ async function ensureEngine(): Promise<MLCEngineInterface> {
     // Run network check and cache check in parallel
     const [networkResult, cacheResult] = await Promise.allSettled([
       checkNetworkConnectivity(),
-      checkModelCacheStatus(currentModel)
+      checkModelCacheStatus(currentModel),
     ]);
 
     // Log parallel results
@@ -378,49 +379,53 @@ async function ensureEngine(): Promise<MLCEngineInterface> {
         ? '🚀 First-time setup: Downloading AI model (~50-200MB)...'
         : '⚡ Loading model from cache...',
       stage: 'initializing',
-      isFirstLoad
+      isFirstLoad,
     });
 
     // Use optimized loader with progress tracking
-    engine = await modelLoader.loadModel(currentModel, (state) => {
-      const progress = Math.round(state.progress * 100);
-      console.log(`🔄 ${state.progressText} (${progress}%)`);
+    engine = await modelLoader.loadModel(
+      currentModel,
+      (state) => {
+        const progress = Math.round(state.progress * 100);
+        console.log(`🔄 ${state.progressText} (${progress}%)`);
 
-      // Send detailed progress updates
-      let message = state.progressText;
-      let stage = 'downloading';
+        // Send detailed progress updates
+        let message = state.progressText;
+        let stage = 'downloading';
 
-      if (progress < 20) {
-        stage = 'initializing';
-        message = isFirstLoad
-          ? `📥 Downloading model... ${progress}% (This may take 1-3 minutes on first load)`
-          : `⚡ Loading from cache... ${progress}%`;
-      } else if (progress < 50) {
-        stage = 'downloading';
-        message = isFirstLoad
-          ? `📥 Downloading model files... ${progress}% (One-time download)`
-          : `🔄 Loading model weights... ${progress}%`;
-      } else if (progress < 80) {
-        stage = 'loading';
-        message = `🔧 Initializing AI engine... ${progress}%`;
-      } else {
-        stage = 'finalizing';
-        message = `✨ Almost ready... ${progress}%`;
+        if (progress < 20) {
+          stage = 'initializing';
+          message = isFirstLoad
+            ? `📥 Downloading model... ${progress}% (This may take 1-3 minutes on first load)`
+            : `⚡ Loading from cache... ${progress}%`;
+        } else if (progress < 50) {
+          stage = 'downloading';
+          message = isFirstLoad
+            ? `📥 Downloading model files... ${progress}% (One-time download)`
+            : `🔄 Loading model weights... ${progress}%`;
+        } else if (progress < 80) {
+          stage = 'loading';
+          message = `🔧 Initializing AI engine... ${progress}%`;
+        } else {
+          stage = 'finalizing';
+          message = `✨ Almost ready... ${progress}%`;
+        }
+
+        // Broadcast progress to all tabs
+        sendProgressToAllTabs({
+          type: 'modelLoadProgress',
+          progress: progress,
+          message: message,
+          stage: stage,
+          isFirstLoad: isFirstLoad,
+        });
+      },
+      {
+        maxRetries: 3,
+        timeoutMs: 120000,
+        preload: false,
       }
-
-      // Broadcast progress to all tabs
-      sendProgressToAllTabs({
-        type: 'modelLoadProgress',
-        progress: progress,
-        message: message,
-        stage: stage,
-        isFirstLoad: isFirstLoad
-      });
-    }, {
-      maxRetries: 3,
-      timeoutMs: 120000,
-      preload: false
-    });
+    );
 
     engineInitialized = true;
     engineInitializing = false;
@@ -437,7 +442,7 @@ async function ensureEngine(): Promise<MLCEngineInterface> {
       progress: 100,
       message: '✅ AI model ready!',
       stage: 'complete',
-      isFirstLoad: false
+      isFirstLoad: false,
     });
 
     console.log('✅ Background AI engine ready with optimized loader!');
@@ -467,19 +472,19 @@ async function checkNetworkConnectivity(): Promise<void> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
-    
+
     // Use a simpler endpoint that's more likely to work
     const response = await fetch('https://huggingface.co/', {
       method: 'HEAD',
-      signal: controller.signal
+      signal: controller.signal,
     });
-    
+
     clearTimeout(timeoutId);
-    
+
     if (!response.ok) {
       throw new Error(`CDN connectivity check failed: ${response.status}`);
     }
-    
+
     console.log('✅ CDN connectivity verified');
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -492,24 +497,24 @@ async function checkNetworkConnectivity(): Promise<void> {
 chrome.runtime.onInstalled.addListener((details) => {
   console.log('Extension installed:', details.reason);
   chrome.storage.local.set({ hasUsedExtension: true });
-  
+
   // Reset initialization state on fresh install
   if (details.reason === 'install') {
     engineInitialized = false;
     engineInitializing = false;
   }
-  
+
   // Pre-initialize the engine after installation with error handling
   if (details.reason === 'install' || details.reason === 'update') {
     console.log('🚀 Pre-initializing engine after', details.reason);
-    ensureEngine().catch(error => {
+    ensureEngine().catch((error) => {
       console.error('Failed to pre-initialize engine:', error);
       // Store the error for debugging
-      chrome.storage.local.set({ 
+      chrome.storage.local.set({
         lastInitError: {
           message: error.message,
-          timestamp: Date.now()
-        }
+          timestamp: Date.now(),
+        },
       });
     });
   }
@@ -522,7 +527,7 @@ async function performHealthCheck(): Promise<boolean> {
       console.log('🏥 Health check: Engine not ready');
       return false;
     }
-    
+
     // Try a simple operation to verify engine is working
     console.log('🏥 Health check: Engine appears healthy');
     return true;
@@ -538,7 +543,7 @@ async function performHealthCheck(): Promise<boolean> {
 // Helper function to send messages to all tabs
 function sendProgressToAllTabs(message: Record<string, unknown>) {
   chrome.tabs.query({}, (tabs) => {
-    tabs.forEach(tab => {
+    tabs.forEach((tab) => {
       if (tab.id) {
         chrome.tabs.sendMessage(tab.id, message).catch(() => {
           // Ignore errors for tabs that don't have content scripts
@@ -567,33 +572,29 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         console.log('✅ AI engine pre-initialized for LinkedIn');
         sendResponse({ engineReady: true, currentModel: currentModel });
       })
-      .catch(error => {
+      .catch((error) => {
         console.error('❌ Failed to pre-initialize engine:', error);
         sendResponse({ engineReady: false, error: error.message, currentModel: currentModel });
       });
     return true; // Keep channel open for async response
   }
-  
+
   if (request.action === 'generateLinkedInReply') {
     console.log('🔵 STEP 4A: Processing standard reply request');
     console.log('🔵 Post content received:', request.postContent?.substring(0, 100));
     handleLinkedInReply(request.postContent, sendResponse);
     return true; // Keep channel open for async response
   }
-  
+
   if (request.action === 'generateLinkedInReplyWithComments') {
     console.log('🔵 STEP 4B: Processing smart reply request');
     console.log('🔵 Comments received:', request.topComments?.length);
-    handleLinkedInReplyWithComments(
-      request.postContent, 
-      request.topComments,
-      sendResponse
-    );
+    handleLinkedInReplyWithComments(request.postContent, request.topComments, sendResponse);
     return true; // Keep channel open for async response
   }
-  
+
   if (request.action === 'checkEngineStatus') {
-    performHealthCheck().then(async isHealthy => {
+    performHealthCheck().then(async (isHealthy) => {
       // Check if model is cached
       const isCached = await checkModelCacheStatus(currentModel);
 
@@ -603,119 +604,131 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         currentModel: currentModel,
         healthy: isHealthy,
         cached: isCached,
-        cacheMessage: isCached ? 'Model loaded from cache' : 'First-time download required'
+        cacheMessage: isCached ? 'Model loaded from cache' : 'First-time download required',
       });
     });
     return true; // Keep channel open for async response
   }
-  
+
   if (request.action === 'getPrompts') {
     chrome.storage.sync.get(['customPrompts'], (result) => {
       console.log('📖 getPrompts - Storage result:', result);
       sendResponse({
         prompts: result.customPrompts || {},
-        defaults: DEFAULT_PROMPTS
+        defaults: DEFAULT_PROMPTS,
       });
     });
     return true;
   }
-  
+
   if (request.action === 'savePrompts') {
     console.log('💾 savePrompts - Saving prompts:', request.prompts);
-    
+
     // Validate the prompts structure
     if (!request.prompts || typeof request.prompts !== 'object') {
       console.error('❌ savePrompts - Invalid prompts structure:', request.prompts);
       sendResponse({ success: false, error: 'Invalid prompts structure' });
       return true;
     }
-    
+
     // Ensure we have the required fields
     const validatedPrompts = {
       standard: request.prompts.standard || '',
-      withComments: request.prompts.withComments || ''
+      withComments: request.prompts.withComments || '',
     };
-    
+
     console.log('✅ savePrompts - Validated prompts:', validatedPrompts);
-    
+
     chrome.storage.sync.set({ customPrompts: validatedPrompts }, () => {
       if (chrome.runtime.lastError) {
         console.error('❌ savePrompts - Storage error:', chrome.runtime.lastError);
         sendResponse({ success: false, error: chrome.runtime.lastError.message });
         return;
       }
-      
+
       console.log('✅ savePrompts - Successfully saved to storage');
-      
+
       // Verify save by reading back
       chrome.storage.sync.get(['customPrompts'], (verifyResult) => {
         console.log('🔍 savePrompts - Verification read:', verifyResult);
-        
+
         if (verifyResult.customPrompts) {
-          console.log('🎯 Verified standard:', verifyResult.customPrompts.standard?.substring(0, 50) + '...');
-          console.log('🎯 Verified withComments:', verifyResult.customPrompts.withComments?.substring(0, 50) + '...');
+          console.log(
+            '🎯 Verified standard:',
+            verifyResult.customPrompts.standard?.substring(0, 50) + '...'
+          );
+          console.log(
+            '🎯 Verified withComments:',
+            verifyResult.customPrompts.withComments?.substring(0, 50) + '...'
+          );
         }
       });
-      
+
       sendResponse({ success: true });
     });
     return true;
   }
-  
+
   if (request.action === 'resetPrompts') {
     chrome.storage.sync.remove('customPrompts', () => {
       sendResponse({ success: true });
     });
     return true;
   }
-  
+
   if (request.action === 'verifyPrompts') {
     chrome.storage.sync.get(['customPrompts'], async (result) => {
       const customPrompts = result.customPrompts || {};
       const hasCustom = Object.keys(customPrompts).length > 0;
-      
+
       console.log('🔍 VERIFICATION RESULTS:');
       console.log('📦 Raw storage data:', result);
       console.log('🎯 Custom prompts found:', hasCustom);
-      
+
       if (hasCustom) {
-        console.log('📝 Standard prompt (first 100 chars):', customPrompts.standard?.substring(0, 100));
-        console.log('📝 Comments prompt (first 100 chars):', customPrompts.withComments?.substring(0, 100));
+        console.log(
+          '📝 Standard prompt (first 100 chars):',
+          customPrompts.standard?.substring(0, 100)
+        );
+        console.log(
+          '📝 Comments prompt (first 100 chars):',
+          customPrompts.withComments?.substring(0, 100)
+        );
       }
-      
+
       // Test actual retrieval
       const standardPrompt = await getUserPrompt('standard');
       const withCommentsPrompt = await getUserPrompt('withComments');
-      
+
       sendResponse({
         hasCustomPrompts: hasCustom,
         customPrompts: customPrompts,
         retrievedStandard: standardPrompt.substring(0, 100),
         retrievedComments: withCommentsPrompt.substring(0, 100),
         isUsingCustomStandard: standardPrompt !== DEFAULT_PROMPTS.standard,
-        isUsingCustomComments: withCommentsPrompt !== DEFAULT_PROMPTS.withComments
+        isUsingCustomComments: withCommentsPrompt !== DEFAULT_PROMPTS.withComments,
       });
     });
     return true;
   }
-  
+
   if (request.action === 'debugPrompts') {
     (async () => {
       const result = await chrome.storage.sync.get(['customPrompts']);
       const standardPrompt = await getUserPrompt('standard');
       const withCommentsPrompt = await getUserPrompt('withComments');
-      
+
       sendResponse({
         stored: result.customPrompts || {},
         activeStandard: standardPrompt.substring(0, 200),
         activeWithComments: withCommentsPrompt.substring(0, 200),
         isCustomStandard: standardPrompt !== DEFAULT_PROMPTS.standard,
-        isCustomWithComments: withCommentsPrompt !== DEFAULT_PROMPTS.withComments
+        isCustomWithComments: withCommentsPrompt !== DEFAULT_PROMPTS.withComments,
       });
     })();
     return true;
   }
-  
+
   if (request.action === 'updateModel') {
     console.log('Model update requested:', request.model);
     if (request.model && request.model !== currentModel) {
@@ -746,9 +759,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     console.log('Manual model initialization requested');
     ensureEngine()
       .then(() => {
-        sendResponse({ success: true, message: 'Model initialized successfully', currentModel: currentModel });
+        sendResponse({
+          success: true,
+          message: 'Model initialized successfully',
+          currentModel: currentModel,
+        });
       })
-      .catch(error => {
+      .catch((error) => {
         sendResponse({ success: false, error: error.message, currentModel: currentModel });
       });
     return true;
@@ -769,7 +786,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       request.post as ParsedPost,
       request.tone as ToneKey,
       request.length as LengthKey,
-      sendResponse,
+      sendResponse
     );
     return true;
   }
@@ -844,7 +861,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     handleProfileCapture(request.fields as RawProfileFields, sendResponse);
     return true;
   }
-  
+
   if (request.type === 'SUCCESS_REDIRECT') {
     chrome.tabs.create({ url: 'https://www.linkedin.com/' });
     return false;
@@ -917,10 +934,18 @@ async function startSsiCapture(): Promise<SsiSnapshot> {
     return snapshot;
   } finally {
     if (onUpdatedListener) {
-      try { chrome.tabs.onUpdated.removeListener(onUpdatedListener); } catch { /* ignore */ }
+      try {
+        chrome.tabs.onUpdated.removeListener(onUpdatedListener);
+      } catch {
+        /* ignore */
+      }
     }
     if (createdTabId !== undefined) {
-      try { await chrome.tabs.remove(createdTabId); } catch { /* tab may already be gone */ }
+      try {
+        await chrome.tabs.remove(createdTabId);
+      } catch {
+        /* tab may already be gone */
+      }
     }
     pendingSsiCapture = null;
     keepAlive.stop();
@@ -955,18 +980,18 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 async function handleQueueScoreFeed(
   posts: ParsedPost[],
-  sendResponse: (response: unknown) => void,
+  sendResponse: (response: unknown) => void
 ): Promise<void> {
   try {
     const profile = await getProfile();
     if (!profile) {
-      sendResponse({ ok: false, error: 'No profile captured. Open popup → Capture Profile first.' });
+      sendResponse({
+        ok: false,
+        error: 'No profile captured. Open popup → Capture Profile first.',
+      });
       return;
     }
-    const [engaged, dismissed] = await Promise.all([
-      getEngagedPosts(),
-      getDismissedPostIds(),
-    ]);
+    const [engaged, dismissed] = await Promise.all([getEngagedPosts(), getDismissedPostIds()]);
     const engagedIds = new Set(engaged.map((e) => e.postId));
     const dismissedIds = new Set(dismissed);
     const recentlyDisplayedAuthors: string[] = []; // TODO: track across refreshes
@@ -993,7 +1018,7 @@ async function handleQueueDraftComment(
   post: ParsedPost,
   tone: ToneKey,
   length: LengthKey,
-  sendResponse: (response: unknown) => void,
+  sendResponse: (response: unknown) => void
 ): Promise<void> {
   keepAlive.start();
   try {
@@ -1031,7 +1056,7 @@ async function handleQueueDraftComment(
 
 async function handleProfileCapture(
   fields: RawProfileFields,
-  sendResponse: (response: unknown) => void,
+  sendResponse: (response: unknown) => void
 ): Promise<void> {
   keepAlive.start();
   try {
@@ -1075,7 +1100,7 @@ async function handleProfileCapture(
 
 async function handleLinkedInReplyWithComments(
   postContent: string,
-  topComments: Array<{text: string, likeCount: number}>,
+  topComments: Array<{ text: string; likeCount: number }>,
   sendResponse: (response: unknown) => void
 ) {
   console.log('🟢 STEP 5: handleLinkedInReplyWithComments started');
@@ -1085,7 +1110,7 @@ async function handleLinkedInReplyWithComments(
     startTime: performance.now(),
     cacheHit: await checkModelCacheStatus(currentModel),
     retryAttempted: false,
-    modelUsed: currentModel
+    modelUsed: currentModel,
   };
 
   try {
@@ -1094,12 +1119,15 @@ async function handleLinkedInReplyWithComments(
     const engine = await ensureEngine();
     metrics.modelLoadTime = performance.now() - engineStartTime;
     console.log('🟢 STEP 5B: Engine ready');
-    
+
     console.log('🟢 STEP 5C: Getting user prompt for withComments...');
-    
+
     // ALWAYS get user's custom prompt or fall back to default
     const systemPrompt = await getUserPrompt('withComments');
-    console.log('🟢 STEP 5D: Got prompt type:', systemPrompt === DEFAULT_PROMPTS.withComments ? 'DEFAULT' : 'CUSTOM');
+    console.log(
+      '🟢 STEP 5D: Got prompt type:',
+      systemPrompt === DEFAULT_PROMPTS.withComments ? 'DEFAULT' : 'CUSTOM'
+    );
     console.log('📋 Using system prompt:', systemPrompt.substring(0, 100) + '...');
 
     // Check storage directly here for debugging
@@ -1107,17 +1135,26 @@ async function handleLinkedInReplyWithComments(
     console.log('🟢 STEP 5E: Direct storage check:', storageCheck);
 
     // Format top comments for context with more detail
-    const topCommentsContext = topComments.length > 0 
-      ? `\n\nTOP PERFORMING COMMENTS (study these patterns):\n${
-          topComments.slice(0, 5).map((c, i) => 
-            `Comment ${i + 1} (${c.likeCount} likes):\n"${c.text}"\nEngagement factor: ${
-              c.likeCount > 100 ? 'Viral' : 
-              c.likeCount > 50 ? 'High' : 
-              c.likeCount > 20 ? 'Medium' : 'Standard'
-            }\n`
-          ).join('\n')
-        }\nKEY PATTERN: Notice what makes these comments successful and apply similar strategies.`
-      : '\n\nNo high-engagement comments available. Focus on adding unique value and asking thoughtful questions.';
+    const topCommentsContext =
+      topComments.length > 0
+        ? `\n\nTOP PERFORMING COMMENTS (study these patterns):\n${topComments
+            .slice(0, 5)
+            .map(
+              (c, i) =>
+                `Comment ${i + 1} (${c.likeCount} likes):\n"${c.text}"\nEngagement factor: ${
+                  c.likeCount > 100
+                    ? 'Viral'
+                    : c.likeCount > 50
+                      ? 'High'
+                      : c.likeCount > 20
+                        ? 'Medium'
+                        : 'Standard'
+                }\n`
+            )
+            .join(
+              '\n'
+            )}\nKEY PATTERN: Notice what makes these comments successful and apply similar strategies.`
+        : '\n\nNo high-engagement comments available. Focus on adding unique value and asking thoughtful questions.';
 
     const userPrompt = `Generate a professional LinkedIn reply to this post:
 
@@ -1136,22 +1173,22 @@ CRITICAL REQUIREMENTS:
 Write your reply directly (no preambles):`;
 
     const messages: ChatCompletionMessageParam[] = [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt }
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
     ];
 
     console.log('🟢 STEP 5F: Starting AI generation...');
     console.log(`🎛️ Using parameters: temperature=${aiTemperature}, maxTokens=${aiMaxTokens}`);
 
     const inferenceStartTime = performance.now();
-    let reply = "";
+    let reply = '';
     const completion = await engine.chat.completions.create({
       stream: true,
       messages: messages,
       max_tokens: aiMaxTokens, // User-configurable
       temperature: aiTemperature, // User-configurable
       top_p: 0.9,
-      stop: ["\n\n", "\n\n\n"] // Only stop on double newlines
+      stop: ['\n\n', '\n\n\n'], // Only stop on double newlines
     });
 
     for await (const chunk of completion) {
@@ -1181,12 +1218,14 @@ Write your reply directly (no preambles):`;
 
       // Also remove any lines that are just meta-commentary
       const lines = cleaned.split('\n');
-      const contentLines = lines.filter(line => {
+      const contentLines = lines.filter((line) => {
         const lower = line.toLowerCase().trim();
-        return !lower.startsWith('here') &&
-               !lower.includes('rewritten') &&
-               !lower.includes('requirements') &&
-               !lower.includes('professional linkedin');
+        return (
+          !lower.startsWith('here') &&
+          !lower.includes('rewritten') &&
+          !lower.includes('requirements') &&
+          !lower.includes('professional linkedin')
+        );
       });
 
       return contentLines.join(' ').trim();
@@ -1195,7 +1234,7 @@ Write your reply directly (no preambles):`;
     const cleanedReply = cleanReply(reply);
 
     // Limit to 1-2 sentences for quality
-    const sentences = cleanedReply.split(/[.!?]+/).filter(s => s.trim().length > 0);
+    const sentences = cleanedReply.split(/[.!?]+/).filter((s) => s.trim().length > 0);
     const maxSentences = sentences.slice(0, 2).join('. ');
     let finalReply = maxSentences.trim() + (cleanedReply.endsWith('?') ? '' : '.');
 
@@ -1207,7 +1246,9 @@ Write your reply directly (no preambles):`;
 
     // If quality is low, retry once with adjusted temperature
     if (!validation.valid && validation.score! < 60) {
-      console.log(`⚠️ Low quality reply (${validation.reason}), retrying with higher temperature...`);
+      console.log(
+        `⚠️ Low quality reply (${validation.reason}), retrying with higher temperature...`
+      );
       metrics.retryAttempted = true;
 
       // Retry with higher temperature for more creativity
@@ -1217,25 +1258,26 @@ Write your reply directly (no preambles):`;
         max_tokens: aiMaxTokens,
         temperature: Math.min(1.0, aiTemperature + 0.15), // Increase temperature
         top_p: 0.9,
-        stop: ["\n\n", "\n\n\n"]
+        stop: ['\n\n', '\n\n\n'],
       });
 
-      let retryReply = "";
+      let retryReply = '';
       for await (const chunk of retryCompletion) {
         const delta = chunk.choices[0]?.delta?.content;
         if (delta) retryReply += delta;
       }
 
       const retryCleanedReply = cleanReply(retryReply);
-      const retrySentences = retryCleanedReply.split(/[.!?]+/).filter(s => s.trim().length > 0);
+      const retrySentences = retryCleanedReply.split(/[.!?]+/).filter((s) => s.trim().length > 0);
       const retryMaxSentences = retrySentences.slice(0, 2).join('. ');
-      const retryFinalReply = retryMaxSentences.trim() + (retryCleanedReply.endsWith('?') ? '' : '.');
+      const retryFinalReply =
+        retryMaxSentences.trim() + (retryCleanedReply.endsWith('?') ? '' : '.');
 
       const retryValidation = validateReplyQuality(retryFinalReply);
       console.log('🔄 Retry validation:', retryValidation);
 
       // Use retry if better, otherwise keep original
-      if (retryValidation.valid || (retryValidation.score! > validation.score!)) {
+      if (retryValidation.valid || retryValidation.score! > validation.score!) {
         finalReply = retryFinalReply;
         console.log('✅ Using retry result (better quality)');
       }
@@ -1253,14 +1295,13 @@ Write your reply directly (no preambles):`;
     sendResponse({
       reply: finalReply,
       basedOnComments: true,
-      commentCount: topComments.length
+      commentCount: topComments.length,
     });
-    
   } catch (error) {
     console.error('🔴 STEP 5 ERROR in handleLinkedInReplyWithComments:', error);
-    sendResponse({ 
+    sendResponse({
       error: 'Failed to generate reply',
-      fallback: true 
+      fallback: true,
     });
   }
 }
@@ -1273,7 +1314,7 @@ async function handleLinkedInReply(postContent: string, sendResponse: (response:
     startTime: performance.now(),
     cacheHit: await checkModelCacheStatus(currentModel),
     retryAttempted: false,
-    modelUsed: currentModel
+    modelUsed: currentModel,
   };
 
   try {
@@ -1282,12 +1323,15 @@ async function handleLinkedInReply(postContent: string, sendResponse: (response:
     const engine = await ensureEngine();
     metrics.modelLoadTime = performance.now() - engineStartTime;
     console.log('🟢 STEP 5B: Engine ready');
-    
+
     console.log('🟢 STEP 5C: Getting user prompt for standard...');
-    
+
     // ALWAYS get user's custom prompt or fall back to default
     const systemPrompt = await getUserPrompt('standard');
-    console.log('� STEP 5D: Got prompt type:', systemPrompt === DEFAULT_PROMPTS.standard ? 'DEFAULT' : 'CUSTOM');
+    console.log(
+      '� STEP 5D: Got prompt type:',
+      systemPrompt === DEFAULT_PROMPTS.standard ? 'DEFAULT' : 'CUSTOM'
+    );
     console.log('�📋 Using system prompt:', systemPrompt.substring(0, 100) + '...');
 
     // Check storage directly here for debugging
@@ -1298,7 +1342,7 @@ async function handleLinkedInReply(postContent: string, sendResponse: (response:
     const postLength = postContent.length;
     const hasQuestion = postContent.includes('?');
     const hasData = /\d+%|\d+\s*(million|billion|thousand)|\$\d+/i.test(postContent);
-    
+
     const contextHints = `
 POST ANALYSIS:
 - Length: ${postLength < 100 ? 'Brief' : postLength < 300 ? 'Medium' : 'Detailed'}
@@ -1321,22 +1365,22 @@ CRITICAL REQUIREMENTS:
 Write your reply directly (no preambles):`;
 
     const messages: ChatCompletionMessageParam[] = [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt }
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
     ];
 
     console.log('🟢 STEP 5F: Starting AI generation...');
     console.log(`🎛️ Using parameters: temperature=${aiTemperature}, maxTokens=${aiMaxTokens}`);
 
     const inferenceStartTime = performance.now();
-    let reply = "";
+    let reply = '';
     const completion = await engine.chat.completions.create({
       stream: true,
       messages: messages,
       max_tokens: aiMaxTokens, // User-configurable
       temperature: aiTemperature, // User-configurable
       top_p: 0.9,
-      stop: ["\n\n", "\n\n\n"] // Only stop on double newlines
+      stop: ['\n\n', '\n\n\n'], // Only stop on double newlines
     });
 
     for await (const chunk of completion) {
@@ -1366,12 +1410,14 @@ Write your reply directly (no preambles):`;
 
       // Also remove any lines that are just meta-commentary
       const lines = cleaned.split('\n');
-      const contentLines = lines.filter(line => {
+      const contentLines = lines.filter((line) => {
         const lower = line.toLowerCase().trim();
-        return !lower.startsWith('here') &&
-               !lower.includes('rewritten') &&
-               !lower.includes('requirements') &&
-               !lower.includes('professional linkedin');
+        return (
+          !lower.startsWith('here') &&
+          !lower.includes('rewritten') &&
+          !lower.includes('requirements') &&
+          !lower.includes('professional linkedin')
+        );
       });
 
       return contentLines.join(' ').trim();
@@ -1380,7 +1426,7 @@ Write your reply directly (no preambles):`;
     const cleanedReply = cleanReply(reply);
 
     // Limit to 1-2 sentences for quality
-    const sentences = cleanedReply.split(/[.!?]+/).filter(s => s.trim().length > 0);
+    const sentences = cleanedReply.split(/[.!?]+/).filter((s) => s.trim().length > 0);
     const maxSentences = sentences.slice(0, 2).join('. ');
     let finalReply = maxSentences.trim() + (cleanedReply.endsWith('?') ? '' : '.');
 
@@ -1392,7 +1438,9 @@ Write your reply directly (no preambles):`;
 
     // If quality is low, retry once with adjusted temperature
     if (!validation.valid && validation.score! < 60) {
-      console.log(`⚠️ Low quality reply (${validation.reason}), retrying with higher temperature...`);
+      console.log(
+        `⚠️ Low quality reply (${validation.reason}), retrying with higher temperature...`
+      );
       metrics.retryAttempted = true;
 
       // Retry with higher temperature for more creativity
@@ -1402,25 +1450,26 @@ Write your reply directly (no preambles):`;
         max_tokens: aiMaxTokens,
         temperature: Math.min(1.0, aiTemperature + 0.15), // Increase temperature
         top_p: 0.9,
-        stop: ["\n\n", "\n\n\n"]
+        stop: ['\n\n', '\n\n\n'],
       });
 
-      let retryReply = "";
+      let retryReply = '';
       for await (const chunk of retryCompletion) {
         const delta = chunk.choices[0]?.delta?.content;
         if (delta) retryReply += delta;
       }
 
       const retryCleanedReply = cleanReply(retryReply);
-      const retrySentences = retryCleanedReply.split(/[.!?]+/).filter(s => s.trim().length > 0);
+      const retrySentences = retryCleanedReply.split(/[.!?]+/).filter((s) => s.trim().length > 0);
       const retryMaxSentences = retrySentences.slice(0, 2).join('. ');
-      const retryFinalReply = retryMaxSentences.trim() + (retryCleanedReply.endsWith('?') ? '' : '.');
+      const retryFinalReply =
+        retryMaxSentences.trim() + (retryCleanedReply.endsWith('?') ? '' : '.');
 
       const retryValidation = validateReplyQuality(retryFinalReply);
       console.log('🔄 Retry validation:', retryValidation);
 
       // Use retry if better, otherwise keep original
-      if (retryValidation.valid || (retryValidation.score! > validation.score!)) {
+      if (retryValidation.valid || retryValidation.score! > validation.score!) {
         finalReply = retryFinalReply;
         console.log('✅ Using retry result (better quality)');
       }
@@ -1436,25 +1485,24 @@ Write your reply directly (no preambles):`;
     logPerformanceMetrics(metrics);
 
     sendResponse({ reply: finalReply });
-    
   } catch (error) {
     console.error('🔴 STEP 5 ERROR in handleLinkedInReply:', error);
-    
+
     // Shorter fallback replies (1-2 sentences)
     const fallbackReplies = [
       "Insightful perspective! What's been your experience with this approach?",
       "This resonates strongly with what we're seeing in the field.",
-      "Excellent points - particularly about the implementation challenges.",
-      "Appreciate you sharing this data-driven analysis!",
-      "Interesting take - how do you see this evolving in the next year?"
+      'Excellent points - particularly about the implementation challenges.',
+      'Appreciate you sharing this data-driven analysis!',
+      'Interesting take - how do you see this evolving in the next year?',
     ];
-    
+
     const fallbackReply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
-    
-    sendResponse({ 
+
+    sendResponse({
       reply: fallbackReply,
       error: 'AI engine is initializing. Using a suggested reply for now.',
-      isInitializing: engineInitializing
+      isInitializing: engineInitializing,
     });
   }
 }
@@ -1477,7 +1525,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && tab.url?.includes('linkedin.com')) {
     console.log('🔍 LinkedIn tab detected, ensuring engine is ready...');
     // Pre-initialize engine for LinkedIn tabs
-    ensureEngine().catch(error => {
+    ensureEngine().catch((error) => {
       console.error('Failed to pre-initialize for LinkedIn tab:', error);
     });
   }

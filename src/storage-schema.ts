@@ -127,7 +127,7 @@ export interface QueuePreferences {
 // ─── Storage helpers ────────────────────────────────────────────────────────
 
 async function readKey<T>(key: string): Promise<T | null> {
-  const result = (await chrome.storage.local.get(key) as unknown) as Record<string, T | undefined>;
+  const result = (await chrome.storage.local.get(key)) as unknown as Record<string, T | undefined>;
   return result[key] ?? null;
 }
 

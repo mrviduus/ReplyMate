@@ -15,11 +15,7 @@
  *   comments:  .social-details-social-counts__comments
  */
 
-import type {
-  ConnectionDegree,
-  FollowerTier,
-  ParsedPost,
-} from './storage-schema';
+import type { ConnectionDegree, FollowerTier, ParsedPost } from './storage-schema';
 
 interface ParseOptions {
   /** Defaults to Date.now(). Override for deterministic tests. */
@@ -90,11 +86,11 @@ function extractAuthorUrn(href: string): string {
 
 export function parseFeedDom(
   doc: Document | DocumentFragment,
-  options: ParseOptions = {},
+  options: ParseOptions = {}
 ): ParsedPost[] {
   const now = options.now ?? Date.now();
   const containers = doc.querySelectorAll(
-    '[data-urn^="urn:li:activity"], .feed-shared-update-v2[data-urn]',
+    '[data-urn^="urn:li:activity"], .feed-shared-update-v2[data-urn]'
   );
 
   const out: ParsedPost[] = [];
@@ -109,9 +105,7 @@ export function parseFeedDom(
 
     const authorName = readText(el.querySelector('.update-components-actor__title'));
     const authorTitle = readText(el.querySelector('.update-components-actor__description'));
-    const subDescription = readText(
-      el.querySelector('.update-components-actor__sub-description'),
-    );
+    const subDescription = readText(el.querySelector('.update-components-actor__sub-description'));
     const followerTier = parseFollowerTier(subDescription);
 
     // Extract the "2h" / "1d" piece from sub-description (between bullets/dots).
@@ -120,7 +114,7 @@ export function parseFeedDom(
     const postedAt = parseAgoToTimestamp(agoMatch?.[1] ?? '', now);
 
     const degreeText = readText(
-      el.querySelector('.update-components-actor__supplementary-actor-info'),
+      el.querySelector('.update-components-actor__supplementary-actor-info')
     );
     const isOwn = degreeText.trim().toLowerCase() === 'you';
     const degree = parseDegree(degreeText);
@@ -132,11 +126,9 @@ export function parseFeedDom(
       el.querySelector('.update-components-text');
     const text = readText(textEl);
 
-    const likeCount = parseCount(
-      readText(el.querySelector('.social-counts-reactions__count')),
-    );
+    const likeCount = parseCount(readText(el.querySelector('.social-counts-reactions__count')));
     const commentCount = parseCount(
-      readText(el.querySelector('.social-details-social-counts__comments')),
+      readText(el.querySelector('.social-details-social-counts__comments'))
     );
 
     out.push({

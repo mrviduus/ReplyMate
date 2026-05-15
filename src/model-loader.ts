@@ -1,4 +1,4 @@
-import { CreateMLCEngine, MLCEngineInterface, InitProgressReport } from "@mlc-ai/web-llm";
+import { CreateMLCEngine, MLCEngineInterface, InitProgressReport } from '@mlc-ai/web-llm';
 
 export interface ModelLoadingConfig {
   modelId: string;
@@ -28,7 +28,7 @@ export class OptimizedModelLoader {
     'Phi-3.5-mini-instruct-q4f16_1-MLC': 'high',
     'gemma-2-2b-it-q4f16_1-MLC': 'medium',
     'Llama-3.2-1B-Instruct-q4f16_1-MLC': 'medium',
-    'Llama-3.2-3B-Instruct-q4f16_1-MLC': 'low'
+    'Llama-3.2-3B-Instruct-q4f16_1-MLC': 'low',
   };
 
   private constructor() {
@@ -75,7 +75,7 @@ export class OptimizedModelLoader {
   private async preloadModel(modelId: string): Promise<void> {
     try {
       const cacheKey = `model_cache_${modelId}`;
-      const cached = await this.getCachedModelMetadata(cacheKey) as { timestamp?: number } | null;
+      const cached = (await this.getCachedModelMetadata(cacheKey)) as { timestamp?: number } | null;
 
       if (cached?.timestamp && Date.now() - cached.timestamp < 7 * 24 * 60 * 60 * 1000) {
         console.log(`✨ Using cached metadata for ${modelId}`);
@@ -88,7 +88,7 @@ export class OptimizedModelLoader {
       await this.setCachedModelMetadata(cacheKey, {
         modelId,
         timestamp: Date.now(),
-        preloaded: true
+        preloaded: true,
       });
     } catch (error) {
       console.warn(`Preload failed for ${modelId}:`, error);
@@ -130,7 +130,7 @@ export class OptimizedModelLoader {
       maxRetries: config?.maxRetries || 3,
       timeoutMs: config?.timeoutMs || 120000,
       preload: config?.preload || false,
-      ...config
+      ...config,
     };
 
     return this.loadWithRetry(loadingConfig, progressCallback);
@@ -142,7 +142,7 @@ export class OptimizedModelLoader {
     let waited = 0;
 
     while (this.currentlyLoading.has(modelId) && waited < maxWait) {
-      await new Promise(resolve => setTimeout(resolve, checkInterval));
+      await new Promise((resolve) => setTimeout(resolve, checkInterval));
       waited += checkInterval;
     }
 
@@ -169,25 +169,21 @@ export class OptimizedModelLoader {
           progress: 0,
           progressText: `Loading ${modelId} (attempt ${attempt}/${maxRetries})`,
           error: null,
-          attemptNumber: attempt
+          attemptNumber: attempt,
         };
 
         this.loadingStates.set(modelId, state);
         progressCallback?.(state);
 
-        const engine = await this.createEngineWithTimeout(
-          modelId,
-          timeoutMs,
-          (report) => {
-            const updatedState = {
-              ...state,
-              progress: report.progress,
-              progressText: report.text
-            };
-            this.loadingStates.set(modelId, updatedState);
-            progressCallback?.(updatedState);
-          }
-        );
+        const engine = await this.createEngineWithTimeout(modelId, timeoutMs, (report) => {
+          const updatedState = {
+            ...state,
+            progress: report.progress,
+            progressText: report.text,
+          };
+          this.loadingStates.set(modelId, updatedState);
+          progressCallback?.(updatedState);
+        });
 
         this.engines.set(modelId, engine);
         this.currentlyLoading.delete(modelId);
@@ -197,7 +193,7 @@ export class OptimizedModelLoader {
           progress: 1,
           progressText: 'Model loaded successfully',
           error: null,
-          attemptNumber: attempt
+          attemptNumber: attempt,
         };
 
         this.loadingStates.set(modelId, successState);
@@ -215,7 +211,7 @@ export class OptimizedModelLoader {
           progress: 0,
           progressText: `Failed: ${lastError.message}`,
           error: lastError.message,
-          attemptNumber: attempt
+          attemptNumber: attempt,
         };
 
         this.loadingStates.set(modelId, errorState);
@@ -223,7 +219,7 @@ export class OptimizedModelLoader {
 
         if (attempt < maxRetries) {
           console.log(`🔄 Retrying ${modelId} in 3 seconds...`);
-          await new Promise(resolve => setTimeout(resolve, 3000));
+          await new Promise((resolve) => setTimeout(resolve, 3000));
         }
       }
     }
@@ -237,7 +233,7 @@ export class OptimizedModelLoader {
     progressCallback: (report: InitProgressReport) => void
   ): Promise<MLCEngineInterface> {
     const enginePromise = CreateMLCEngine(modelId, {
-      initProgressCallback: progressCallback
+      initProgressCallback: progressCallback,
     });
 
     const timeoutPromise = new Promise<never>((_, reject) =>
@@ -251,15 +247,17 @@ export class OptimizedModelLoader {
     try {
       console.log(`🏥 Performing health check for ${modelId}`);
 
-      const testMessage = [{
-        role: "user" as const,
-        content: "Hello"
-      }];
+      const testMessage = [
+        {
+          role: 'user' as const,
+          content: 'Hello',
+        },
+      ];
 
       const reply = await engine.chat.completions.create({
         messages: testMessage,
         max_tokens: 10,
-        temperature: 0.5
+        temperature: 0.5,
       });
 
       if (!reply.choices[0]?.message?.content) {
@@ -289,7 +287,7 @@ export class OptimizedModelLoader {
   }
 
   async unloadAllModels(): Promise<void> {
-    const unloadPromises = Array.from(this.engines.keys()).map(modelId =>
+    const unloadPromises = Array.from(this.engines.keys()).map((modelId) =>
       this.unloadModel(modelId)
     );
     await Promise.all(unloadPromises);
@@ -326,7 +324,7 @@ export class OptimizedModelLoader {
     }
     return {
       totalJSHeapSize: 2048 * 1024 * 1024,
-      usedJSHeapSize: 1024 * 1024 * 1024
+      usedJSHeapSize: 1024 * 1024 * 1024,
     };
   }
 }

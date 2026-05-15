@@ -45,7 +45,9 @@
   color: #6a737d;
   padding: 0 4px;
 }
-.replymate-queue__close:hover { color: #1d1d1f; }
+.replymate-queue__close:hover {
+  color: #1d1d1f;
+}
 
 .replymate-queue__controls {
   display: flex;
@@ -228,7 +230,8 @@
     background: #2a2a2c;
     border-color: rgba(255, 255, 255, 0.08);
   }
-  .replymate-queue__draft, .replymate-queue__control select {
+  .replymate-queue__draft,
+  .replymate-queue__control select {
     background: #1d1d1f;
     color: #f5f5f7;
     border-color: rgba(255, 255, 255, 0.12);

@@ -11,12 +11,7 @@
  * Refresh is throttled to once per QUEUE_REFRESH_THROTTLE_MS (5 minutes).
  */
 
-import type {
-  ParsedPost,
-  ScoredPost,
-  ToneKey,
-  LengthKey,
-} from './storage-schema';
+import type { ParsedPost, ScoredPost, ToneKey, LengthKey } from './storage-schema';
 
 export const QUEUE_REFRESH_THROTTLE_MS = 5 * 60 * 1000;
 export const QUEUE_MAX_VISIBLE = 10;
@@ -32,9 +27,7 @@ export interface DraftRequest {
  * scoring is not possible (e.g. no profile captured yet) instead of silently
  * rendering an empty list.
  */
-export type ScoreFeedResult =
-  | { ok: true; scored: ScoredPost[] }
-  | { ok: false; warning: string };
+export type ScoreFeedResult = { ok: true; scored: ScoredPost[] } | { ok: false; warning: string };
 
 export interface EngagementQueueDeps {
   scoreFeed?: (posts: ParsedPost[]) => Promise<ScoreFeedResult>;
@@ -67,12 +60,18 @@ function defaultOpenPost(postId: string): void {
 function esc(text: string): string {
   return text.replace(/[&<>"']/g, (c) => {
     switch (c) {
-      case '&': return '&amp;';
-      case '<': return '&lt;';
-      case '>': return '&gt;';
-      case '"': return '&quot;';
-      case "'": return '&#39;';
-      default: return c;
+      case '&':
+        return '&amp;';
+      case '<':
+        return '&lt;';
+      case '>':
+        return '&gt;';
+      case '"':
+        return '&quot;';
+      case "'":
+        return '&#39;';
+      default:
+        return c;
     }
   });
 }
@@ -213,9 +212,7 @@ export class EngagementQueue {
 
   private renderList(): void {
     if (!this.listEl) return;
-    this.listEl.innerHTML = this.currentScored
-      .map((s, i) => this.renderTile(s, i + 1))
-      .join('');
+    this.listEl.innerHTML = this.currentScored.map((s, i) => this.renderTile(s, i + 1)).join('');
   }
 
   private renderTile(s: ScoredPost, rank: number): string {
@@ -242,15 +239,15 @@ export class EngagementQueue {
   }
 
   private getTile(postId: string): HTMLElement | null {
-    return (
-      this.listEl?.querySelector(
-        `.replymate-queue__tile[data-post-id="${CSS.escape(postId)}"]`,
-      ) as HTMLElement | null
-    );
+    return this.listEl?.querySelector(
+      `.replymate-queue__tile[data-post-id="${CSS.escape(postId)}"]`
+    ) as HTMLElement | null;
   }
 
   private getDraftEl(postId: string): HTMLTextAreaElement | null {
-    return this.getTile(postId)?.querySelector('.replymate-queue__draft') as HTMLTextAreaElement | null;
+    return this.getTile(postId)?.querySelector(
+      '.replymate-queue__draft'
+    ) as HTMLTextAreaElement | null;
   }
 
   private async regenerateOne(postId: string): Promise<void> {
@@ -286,7 +283,11 @@ export class EngagementQueue {
       // ignore — clipboard may be denied; user still gets the new tab
     }
     if (this.deps.markEngaged) {
-      try { await this.deps.markEngaged(postId); } catch { /* swallow */ }
+      try {
+        await this.deps.markEngaged(postId);
+      } catch {
+        /* swallow */
+      }
     }
     open(postId);
     // Remove the tile from the visible list (engaged → out of queue for 30 days)
@@ -296,7 +297,11 @@ export class EngagementQueue {
 
   private async hideOne(postId: string): Promise<void> {
     if (this.deps.dismiss) {
-      try { await this.deps.dismiss(postId); } catch { /* swallow */ }
+      try {
+        await this.deps.dismiss(postId);
+      } catch {
+        /* swallow */
+      }
     }
     this.currentScored = this.currentScored.filter((s) => s.id !== postId);
     this.getTile(postId)?.remove();
