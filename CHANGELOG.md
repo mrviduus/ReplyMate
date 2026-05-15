@@ -4,6 +4,45 @@ All notable changes to ReplyMate are documented here. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows
 [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.8] — 2026-05-15 — Reply button injection: Chrome-MCP-verified DOM
+
+### The bug in v0.5.7
+
+v0.5.7 anchored on `button[aria-label*="omment" i]`, expecting the Comment action button to have `aria-label="Comment"`. **It doesn't.** Live DOM inspection via Chrome MCP on linkedin.com/feed/ revealed:
+
+| Button      | `aria-label`                       | `textContent`   |
+| ----------- | ---------------------------------- | --------------- |
+| Like        | `"Reaction button state: <state>"` | `"Like"`        |
+| Reactions   | `"Open reactions menu"`            | `""`            |
+| **Comment** | **`null`**                         | **`"Comment"`** |
+| **Repost**  | **`null`**                         | **`"Repost"`**  |
+
+v0.5.7's selector matched only kebab menus on existing comments under the post (`aria-label="View more options for X's comment"`) — never the actual Comment action button. So the action bar was never found and no Reply button was injected.
+
+Posts also no longer use `data-urn` or `<article>` in the 2026 feed — they're `<div componentkey="<base64-id>">`. The 2026 feed had **0** elements matching `[data-urn*="urn:li:activity"]`.
+
+### Fixed
+
+- **`findActionContainer`**: anchor on `button[aria-label^="Reaction button state"]` (LinkedIn ships per-state labels so screen readers can announce "Like" / "Celebrate" / etc — stable a11y contract). Walk up to the parent with 3-8 sibling buttons. Fallback: button with `textContent === "Comment"` (exact match).
+- **`processVisiblePosts`**: now does TWO passes — legacy direct selectors for older caches, AND a new inverse pass that finds Reaction buttons across the document then walks up to the containing `<div componentkey="...">` post. The componentkey attribute presence is the stable post-container signal.
+
+### How this was verified
+
+- Chrome MCP browser-control loaded /feed/ in a controlled tab
+- JS introspection enumerated every `<button>` aria-label on the page
+- Found `"View more options for X's comment"` was the only match for v0.5.7's selector — explaining why injection failed
+- Found Reaction buttons + Comment-text buttons follow the structure documented above
+
+This is the FIRST DOM fix in this session that's grounded in real-time live inspection rather than synthetic guesses. v0.5.6 used a user-pasted HTML dump; v0.5.7 was assumption-based.
+
+### Still deferred to v0.5.9+
+
+- Reply button's `handleLinkedInReplyWithComments` background handler still uses local WebLLM directly (not provider abstraction). So even with the button restored, clicking it ignores OpenAI mode. Engagement Queue sidebar (separate code path) uses OpenAI correctly.
+- `feed-parser.ts` (used by Engagement Queue) still uses legacy selectors. Same fix class — `data-urn` / `.feed-shared-update-v2` don't exist in 2026.
+- Tests for new injection path — currently no integration test covers it because the action-bar discovery is heuristic (depends on live DOM). Adding a JSDOM-based fixture test is straightforward but skipped this round.
+
+---
+
 ## [0.5.7] — 2026-05-15 — Reply button injection: real-DOM rewrite (same fix class as v0.5.6)
 
 ### Fixed

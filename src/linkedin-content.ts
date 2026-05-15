@@ -227,33 +227,62 @@ class LinkedInReplyMate {
     this.isProcessing = true;
 
     try {
-      // v0.5.7 — LinkedIn 2026 React SDUI: legacy class names (.feed-shared-update-v2 etc.)
-      // are gone, replaced by hash classes. The STABLE signal is the URN attribute:
-      // `data-urn="urn:li:activity:..."` — LinkedIn's domain model URN scheme that
-      // hasn't changed in 5+ years. Plus `<article>` semantic tag for posts.
-      const postSelectors = [
-        // Stable URN-based selectors (work across LinkedIn DOM redesigns)
+      // v0.5.8 — Post discovery rewritten after Chrome-MCP-verified DOM inspection.
+      //
+      // LinkedIn 2026 feed has NEITHER data-urn NOR <article> tags on posts.
+      // Posts are <div componentkey="<base64-id>"> with hash class names.
+      // The reliable way to find posts: locate action bars (which contain a
+      // Reaction button — a11y-stable aria-label) and walk up to the post
+      // container.
+      //
+      // We INVERT discovery: find all Reaction buttons → walk up to post → process.
+
+      const seen = new Set<Element>();
+
+      // Strategy A (legacy / older caches): direct post selectors
+      const legacyPostSelectors = [
         '[data-urn*="urn:li:activity"]',
         '[data-id*="urn:li:activity"]',
         '[data-activity-urn]',
-        // Semantic fallback for 2026 SDUI
         'article[data-urn]',
-        'article[componentkey*="update"]',
-        // Legacy class names — kept for older LinkedIn page caches; harmless if absent
         '.feed-shared-update-v2',
         'div[class*="occludable-update"]',
         '.feed-shared-update',
         '[data-test-id="main-feed-activity-card"]',
       ];
-
-      const seen = new Set<Element>();
-      postSelectors.forEach((selector) => {
+      legacyPostSelectors.forEach((selector) => {
         const posts = document.querySelectorAll(selector);
         posts.forEach((post) => {
           if (seen.has(post)) return;
           seen.add(post);
           this.processPost(post as HTMLElement);
         });
+      });
+
+      // Strategy B (2026 SDUI): find action bars via Reaction button, walk up
+      // to the containing <div componentkey="..."> post.
+      const reactionButtons = document.querySelectorAll(
+        'button[aria-label^="Reaction button state" i]'
+      );
+      reactionButtons.forEach((rxBtn) => {
+        // Walk up until we hit a div that has componentkey AND contains the
+        // entire post (heuristic: stop when we hit a parent with componentkey
+        // attribute set, since each post is wrapped in one).
+        let cur: HTMLElement | null = rxBtn as HTMLElement;
+        let depth = 0;
+        while (cur && cur !== document.body && depth < 15) {
+          cur = cur.parentElement;
+          depth++;
+          if (!cur) break;
+          if (cur.getAttribute('componentkey')) {
+            // Verify it actually looks like a post — contains an action bar (3+ buttons)
+            if (cur.querySelectorAll('button').length >= 3 && !seen.has(cur)) {
+              seen.add(cur);
+              this.processPost(cur);
+            }
+            break;
+          }
+        }
       });
     } finally {
       this.isProcessing = false;
@@ -422,18 +451,28 @@ class LinkedInReplyMate {
   }
 
   /**
-   * v0.5.7 — Find the action bar (Like/Comment/Share toolbar) inside a post.
+   * v0.5.8 — Find the action bar (Like/Comment/Repost/Send toolbar) inside a post.
    *
-   * Real-DOM strategy: walk up from the Comment button (whose aria-label is
-   * stable for screen-reader accessibility) to find the toolbar container.
-   * Falls back to legacy class names for older LinkedIn caches.
+   * REAL DOM findings — verified via Chrome MCP on live linkedin.com/feed/:
+   *   - Like button:    aria-label="Reaction button state: <state>"  +  text="Like"
+   *   - Reactions menu: aria-label="Open reactions menu"             +  text=""
+   *   - Comment button: aria-label=NULL                              +  text="Comment"  ← !
+   *   - Repost button:  aria-label=NULL                              +  text="Repost"
    *
-   * Why aria-label="Comment" survives redesigns: it's not a class, it's an
-   * accessibility contract that LinkedIn ships to actual users with assistive
-   * tech. Removing it would regress a11y compliance, so it stays.
+   * That's why v0.5.7's `aria-label*="omment"` matched only kebab menus on
+   * existing comments ("View more options for X's comment"), NOT the actual
+   * Comment action button — Comment has NO aria-label in 2026, only inner text.
+   *
+   * Strategy:
+   *   1. Anchor on the Reaction button via its stable a11y label
+   *      `aria-label^="Reaction button state"` (LinkedIn ships per-state labels
+   *      so screen readers can announce "Like", "Celebrate", etc.)
+   *   2. Walk up to the parent containing 3-8 sibling buttons (action bar)
+   *   3. Fallback: find a button whose textContent === "Comment" (exact),
+   *      walk up the same way.
    */
   private findActionContainer(post: HTMLElement): Element | null {
-    // Legacy class selectors — kept first because they're cheap when they hit
+    // Legacy class selectors — cheap to check, harmless if absent
     const staleSelectors = [
       '.feed-shared-social-actions',
       '.social-details-social-activity',
@@ -446,26 +485,40 @@ class LinkedInReplyMate {
       if (el) return el;
     }
 
-    // v0.5.7 real-DOM strategy: find Comment button by aria-label, walk up to
-    // the toolbar/action-bar container.
-    const commentBtn = post.querySelector(
-      'button[aria-label^="Comment" i], button[aria-label*="omment" i]'
-    );
-    if (!commentBtn) return null;
+    const walkUpToActionBar = (start: HTMLElement): Element | null => {
+      let parent: HTMLElement | null = start.parentElement;
+      let depth = 0;
+      while (parent && parent !== post && depth < 8) {
+        if (parent.getAttribute('role') === 'toolbar') return parent;
+        const buttonCount = parent.querySelectorAll(':scope > * button, :scope > button').length;
+        if (buttonCount >= 3 && buttonCount <= 8) return parent;
+        parent = parent.parentElement;
+        depth++;
+      }
+      return null;
+    };
 
-    // Walk up to the smallest container that holds the action bar.
-    let parent: HTMLElement | null = commentBtn.parentElement;
-    while (parent && parent !== post) {
-      // role="toolbar" is the most explicit signal
-      if (parent.getAttribute('role') === 'toolbar') return parent;
-      // Heuristic: parent containing 3–8 buttons is the action bar
-      // (Like + Comment + Share + Repost/Send is typically 3-5 buttons)
-      const buttonCount = parent.querySelectorAll(':scope > * button, :scope > button').length;
-      if (buttonCount >= 3 && buttonCount <= 8) return parent;
-      parent = parent.parentElement;
+    // Strategy A: Reaction button (Like) by stable aria-label prefix
+    const reactionBtn = post.querySelector(
+      'button[aria-label^="Reaction button state" i], button[aria-label="Open reactions menu"]'
+    );
+    if (reactionBtn) {
+      const bar = walkUpToActionBar(reactionBtn as HTMLElement);
+      if (bar) return bar;
     }
-    // Last resort: the Comment button's immediate parent
-    return commentBtn.parentElement;
+
+    // Strategy B: button with exact textContent === "Comment" (Comment button
+    // has no aria-label in 2026 LinkedIn).
+    const allButtons = post.querySelectorAll('button');
+    for (const btn of Array.from(allButtons)) {
+      if ((btn.textContent ?? '').trim() === 'Comment') {
+        const bar = walkUpToActionBar(btn as HTMLElement);
+        if (bar) return bar;
+        return btn.parentElement;
+      }
+    }
+
+    return null;
   }
 
   private createReplyButton(postId: string): HTMLElement {
