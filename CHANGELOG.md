@@ -4,6 +4,31 @@ All notable changes to ReplyMate are documented here. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows
 [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.6] — 2026-05-15 — Real-DOM profile parser rewrite
+
+### The actual root cause (finally)
+
+User pasted the real `/in/{handle}/` HTML. Three findings drove a full rewrite:
+
+1. **LinkedIn migrated to React Server-Driven UI in 2026.** ALL CSS class names on the profile are auto-generated hashes (e.g. `_75907f35`, `da7899c1`). My old selectors (`.text-heading-xlarge`, `#about`, `#skills`, `.pvs-list__paged-list-item`) don't exist anywhere on the page. The defensive multi-selector parser from v0.5.2 was matching ghosts.
+2. **About / Skills / Activity are NOT in the initial HTML.** They live in empty `<div componentkey="profileCardsAboveActivity..." or "...BelowActivityPart1..7">` placeholders that get filled via async XHR **after the user scrolls them into view**. Our previous `executeScript` grabbed HTML before async load.
+3. **What IS stable in initial HTML**: bare `<h1>` for name (inside `<main>`; sticky-header h1 is outside), `<p>` for headline/location/current-job, and `aria-label="${fullName}"` on the topcard — strong semantic anchor.
+
+### Fixed
+
+- **`profile-context.ts` now scrolls before grabbing HTML.** executeScript func is async — scrolls mid → bottom → original position (3.5s total wait) to trigger LinkedIn's lazy section loads, then returns `documentElement.outerHTML`. Wrapped in keepAlive.
+- **`profile-parser.ts` rewritten with heading-anchor strategy:**
+  - Name → `main h1`
+  - Headline → longest non-location `<p>` in `div[aria-label="${name}"]`, fallback to first `<p>` matching `| ... · ...` pattern
+  - About / Skills / Activity → find the section heading (`<h2>About</h2>` etc.), grab `closest('section, div[componentkey]')` content. Heading text is stable across LinkedIn redesigns; class names are not.
+
+### Tests
+
+- **15 new profile-parser tests** driven against minimal HTML strings shaped like the real 2026 DOM. Old fixture-based tests (12) removed.
+- Total: **347/347** (was 342).
+
+---
+
 ## [0.5.5] — 2026-05-15 — Fix CodeQL upload permission on main-branch CI
 
 ### Fixed
