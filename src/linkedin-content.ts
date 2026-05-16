@@ -308,17 +308,19 @@ class LinkedInReplyMate {
   }
 
   private getPostId(element: HTMLElement): string | null {
+    const componentkey = element.getAttribute('componentkey');
     return (
       element.getAttribute('data-id') ||
       element.getAttribute('data-urn') ||
       element.getAttribute('data-activity-urn') ||
+      (componentkey ? `urn:li:component:${componentkey}` : '') ||
       element.id ||
       `post-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
     );
   }
 
   private extractPostText(postElement: HTMLElement): string {
-    // Look for post content in various possible locations
+    // Strategy A — legacy class names (still seen in older page caches).
     const contentSelectors = [
       '.feed-shared-text',
       '[data-test-id="main-feed-activity-content"]',
@@ -334,19 +336,30 @@ class LinkedInReplyMate {
       if (contentElement?.textContent) {
         const text = contentElement.textContent.trim();
         if (text.length > 10) {
-          // Only return meaningful text
           return text;
         }
       }
     }
 
-    return '';
+    // Strategy B (2026 SDUI) — class names are auto-generated hashes. Use
+    // the longest <p> in the post that isn't time / engagement counts.
+    let best = '';
+    const paragraphs = postElement.querySelectorAll('p');
+    paragraphs.forEach((p) => {
+      const t = (p.textContent ?? '').trim().replace(/\s+/g, ' ');
+      if (t.length < 30) return;
+      if (/^\d+\s*[smhdw]\b/i.test(t)) return; // time stamps
+      if (/^\d[\d,]*\s+(reactions?|comments?|reposts?)/i.test(t)) return; // counts
+      if (t.length > best.length) best = t;
+    });
+    return best;
   }
 
   private extractComments(postElement: HTMLElement): LinkedInComment[] {
     const comments: LinkedInComment[] = [];
+    const seen = new Set<Element>();
 
-    // LinkedIn comment selectors
+    // Strategy A — legacy class names.
     const commentSelectors = [
       '.comments-comment-item',
       '[data-test-id="comments-comment-item"]',
@@ -356,21 +369,29 @@ class LinkedInReplyMate {
 
     for (const selector of commentSelectors) {
       const commentElements = postElement.querySelectorAll(selector);
-
       commentElements.forEach((commentEl: Element) => {
+        if (seen.has(commentEl)) return;
+        seen.add(commentEl);
         const comment = this.extractCommentData(commentEl as HTMLElement);
-        if (comment) {
-          comments.push(comment);
-        }
+        if (comment) comments.push(comment);
       });
     }
 
-    // Sort by like count (highest first)
+    // Strategy B (2026 SDUI) — each comment wrapped in
+    // <div componentkey="replaceableComment_urn:li:comment:...">.
+    const sduiComments = postElement.querySelectorAll('[componentkey^="replaceableComment_"]');
+    sduiComments.forEach((commentEl: Element) => {
+      if (seen.has(commentEl)) return;
+      seen.add(commentEl);
+      const comment = this.extractCommentData(commentEl as HTMLElement);
+      if (comment) comments.push(comment);
+    });
+
     return comments.sort((a, b) => b.likeCount - a.likeCount);
   }
 
   private extractCommentData(commentElement: HTMLElement): LinkedInComment | null {
-    // Extract comment text
+    // Strategy A — legacy text containers.
     const textSelectors = [
       '.comments-comment-item__main-content',
       '.comments-comment-texteditor',
@@ -387,21 +408,40 @@ class LinkedInReplyMate {
       }
     }
 
+    // Strategy B (2026 SDUI) — longest <p> in the row that isn't the
+    // author byline / timestamp.
+    if (!commentText) {
+      let best = '';
+      commentElement.querySelectorAll('p').forEach((p) => {
+        const t = (p.textContent ?? '').trim().replace(/\s+/g, ' ');
+        if (t.length < 5) return;
+        if (/^\d+\s*[smhdw]\b/i.test(t)) return; // timestamp
+        if (t.length > best.length) best = t;
+      });
+      commentText = best;
+    }
+
     if (!commentText) return null;
 
-    // Extract like count
     const likeCount = this.extractLikeCount(commentElement);
 
+    // Prefer the SDUI URN baked into componentkey for stable dedup.
+    const ck = commentElement.getAttribute('componentkey') ?? '';
+    const id =
+      ck && ck.startsWith('replaceableComment_')
+        ? ck.replace(/^replaceableComment_/, '')
+        : `comment-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
     return {
-      id: `comment-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id,
       text: commentText,
-      likeCount: likeCount,
+      likeCount,
       element: commentElement,
     };
   }
 
   private extractLikeCount(commentElement: HTMLElement): number {
-    // LinkedIn like count selectors
+    // Strategy A — legacy class names.
     const likeSelectors = [
       '.social-counts-reactions__count',
       '[data-test-id="social-actions__reaction-count"]',
@@ -412,9 +452,16 @@ class LinkedInReplyMate {
     for (const selector of likeSelectors) {
       const likeEl = commentElement.querySelector(selector);
       if (likeEl?.textContent) {
-        // Parse the number (might be "12", "1.2K", etc.)
         return this.parseLikeCount(likeEl.textContent);
       }
+    }
+
+    // Strategy B (2026 SDUI) — the reactions button parent holds the count
+    // (e.g. "0", "12", "1.2K") right next to the button.
+    const rxBtn = commentElement.querySelector('button[aria-label="Open reactions menu"]');
+    const parentText = rxBtn?.parentElement?.textContent?.trim();
+    if (parentText && /\d/.test(parentText)) {
+      return this.parseLikeCount(parentText);
     }
 
     return 0;

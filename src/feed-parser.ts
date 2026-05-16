@@ -199,27 +199,33 @@ function parseSduiPost(el: Element, now: number): ParsedPost | null {
   if (!componentkey) return null;
   const id = `urn:li:component:${componentkey}`;
 
-  // Author: prefer /in/ link (personal), fallback to /company/ link
-  const profileLink =
-    el.querySelector('a[href*="/in/"]') ?? el.querySelector('a[href*="/company/"]');
-  const authorHref = profileLink?.getAttribute('href') ?? '';
-  const authorUrn = authorUrnFromHref(authorHref);
-  // Author name is rendered in a span elsewhere; the <a>'s textContent is
-  // often empty. Find the FIRST non-empty bold-ish span near the link.
-  // Pragmatic: look at the first <span> within author link's parent that
-  // has reasonable text (2-60 chars).
+  // Author: iterate /in/ and /company/ links — many /in/ links are mention
+  // tags inside the post body with empty parent spans. Pick the FIRST link
+  // whose parent yields a real name-like span.
+  const candidateLinks = Array.from(el.querySelectorAll('a[href*="/in/"], a[href*="/company/"]'));
+  let profileLink: Element | null = null;
   let authorName = '';
-  if (profileLink) {
-    const candidates = (profileLink.parentElement ?? profileLink).querySelectorAll('span');
-    for (const span of Array.from(candidates)) {
+  for (const link of candidateLinks) {
+    const parent = link.parentElement ?? link;
+    const spans = Array.from(parent.querySelectorAll('span'));
+    for (const span of spans) {
       const t = readText(span);
       if (t.length >= 2 && t.length <= 80 && !/^\d/.test(t) && !/^·/.test(t)) {
+        profileLink = link;
         authorName = t;
         break;
       }
     }
-    if (!authorName) authorName = readText(profileLink);
+    if (profileLink) break;
   }
+  // Last-resort: first /in/ or /company/ link even without name (degrade
+  // gracefully so authorUrn still resolves).
+  if (!profileLink && candidateLinks.length > 0) {
+    profileLink = candidateLinks[0];
+    authorName = readText(profileLink);
+  }
+  const authorHref = profileLink?.getAttribute('href') ?? '';
+  const authorUrn = authorUrnFromHref(authorHref);
 
   // Time: short text matching N[smhdw]
   let postedAt = now;

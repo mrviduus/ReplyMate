@@ -65,6 +65,16 @@ let engineInitialized = false;
 let engineInitializing = false;
 let currentModel = getOptimalBackgroundModel(); // Use fast model initially
 
+// v0.5.10 — Idle auto-unload. Bumped every time engine is used so an inactive
+// 2 GB model doesn't squat VRAM forever.
+let lastEngineUseAt = 0;
+const ENGINE_IDLE_ALARM = 'replymate.engine.idleCheck';
+const ENGINE_IDLE_TIMEOUT_MS = 15 * 60 * 1000; // 15 min
+const ENGINE_IDLE_CHECK_MIN = 5;
+function markEngineUsed(): void {
+  lastEngineUseAt = Date.now();
+}
+
 // AI generation parameters - Optimized defaults for better quality
 let aiTemperature = 0.85; // Higher creativity
 let aiMaxTokens = 150; // Longer, more detailed responses
@@ -333,6 +343,7 @@ async function checkModelCacheStatus(modelId: string): Promise<boolean> {
 // Initialize engine on first use with optimized loader
 async function ensureEngine(): Promise<MLCEngineInterface> {
   if (engine && engineInitialized) {
+    markEngineUsed();
     return engine;
   }
 
@@ -347,6 +358,7 @@ async function ensureEngine(): Promise<MLCEngineInterface> {
     }
 
     if (engine && engineInitialized) {
+      markEngineUsed();
       return engine;
     } else {
       throw new Error('Engine initialization timed out or failed');
@@ -456,6 +468,7 @@ async function ensureEngine(): Promise<MLCEngineInterface> {
     });
 
     console.log('✅ Background AI engine ready with optimized loader!');
+    markEngineUsed();
     return engine;
   } catch (error) {
     engineInitializing = false;
@@ -1053,8 +1066,23 @@ async function startSsiCapture(): Promise<SsiSnapshot> {
 chrome.runtime.onInstalled.addListener(() => {
   chrome.alarms.create(SSI_ALARM_NAME, { periodInMinutes: 1440 });
   console.log(`⏰ Registered daily SSI alarm: ${SSI_ALARM_NAME} (every 1440 min)`);
+  chrome.alarms.create(ENGINE_IDLE_ALARM, { periodInMinutes: ENGINE_IDLE_CHECK_MIN });
+  console.log(
+    `⏰ Registered engine idle check: ${ENGINE_IDLE_ALARM} (every ${ENGINE_IDLE_CHECK_MIN} min)`
+  );
 });
 chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === ENGINE_IDLE_ALARM) {
+    if (!engine || !engineInitialized || engineInitializing) return;
+    if (lastEngineUseAt === 0) return; // defensive: never-used → don't unload
+    const idleMs = Date.now() - lastEngineUseAt;
+    if (idleMs < ENGINE_IDLE_TIMEOUT_MS) return;
+    console.log(
+      `⏰ Engine idle for ${Math.round(idleMs / 60000)} min → auto-unloading to free VRAM`
+    );
+    unloadEngine().catch((e) => console.warn('Idle auto-unload failed:', e));
+    return;
+  }
   if (alarm.name !== SSI_ALARM_NAME) return;
   console.log('⏰ SSI daily alarm fired');
   startSsiCapture()
